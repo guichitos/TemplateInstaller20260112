@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger(__name__).info("[INFO] Desinstalando desde: %s", base_dir)
 
     destinations = common.default_destinations()
-    open_flags = common.determine_uninstall_open_flags(base_dir, destinations)
+    open_flags = common.determine_uninstall_open_flags(base_dir, destinations, design_mode)
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info(
             "[INFO] Rutas default: WORD=%s PPT=%s EXCEL=%s",
