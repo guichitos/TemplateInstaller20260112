@@ -493,6 +493,7 @@ def install_template(
     if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER and filename.lower().endswith(".thmx"):
         flags.open_document_theme = True
         flags.document_theme_selection = destination
+        flags.open_ppt = True
 
 
 def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: InstallFlags, allowed: Iterable[str], validation_enabled: bool, design_mode: bool) -> None:
@@ -563,6 +564,7 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
         if extension == ".thmx":
             flags.open_document_theme = True
             flags.document_theme_selection = destination_root / filename
+            flags.open_ppt = True
         if destination_root in {DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH, DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH}:
             flags.custom_selection = flags.custom_selection or destination_root / filename
 
@@ -657,7 +659,7 @@ def delete_custom_copies(base_dir: Path, destinations: dict[str, Path], design_m
                 _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", candidate, exc)
 
 
-def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path]) -> InstallFlags:
+def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> InstallFlags:
     flags = InstallFlags()
     roaming = destinations["ROAMING"]
     excel = destinations["EXCEL"]

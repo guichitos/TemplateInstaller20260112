@@ -85,7 +85,6 @@ def main(argv: Iterable[str] | None = None) -> int:
     common.close_office_apps(design_mode)
 
     destinations = common.default_destinations()
-    common.open_template_folders(resolved_paths, design_mode)
     flags = common.InstallFlags()
 
     # Plantillas base
