@@ -256,14 +256,7 @@ def iter_template_files(base_dir: Path) -> Iterator[Path]:
 
 
 def resolve_base_directory(base_dir: Path) -> Path:
-    """Busca la carpeta que contiene las plantillas dentro de la ruta actual."""
-    candidates = [base_dir, base_dir / "payload", base_dir / "templates", base_dir / "extracted"]
-    parent = base_dir.parent
-    if parent != base_dir:
-        candidates.extend([parent, parent / "payload", parent / "templates", parent / "extracted"])
-    for candidate in candidates:
-        if any(candidate.glob("*.dot*")) or any(candidate.glob("*.pot*")) or any(candidate.glob("*.xlt*")):
-            return normalize_path(candidate)
+    """Usa únicamente la ruta actual como base para las plantillas."""
     return normalize_path(base_dir)
 
 
