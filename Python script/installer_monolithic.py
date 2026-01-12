@@ -1098,7 +1098,6 @@ def main(argv: Iterable[str] | None = None) -> int:
     close_office_apps(design_mode)
 
     destinations = default_destinations()
-    open_template_folders(resolved_paths, design_mode)
     flags = InstallFlags()
 
     base_targets = [
