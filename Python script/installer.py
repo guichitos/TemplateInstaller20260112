@@ -4,7 +4,8 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import time
+import subprocess
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -123,17 +124,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         validation_enabled=validation_enabled,
         design_mode=design_mode,
     )
-    common.open_template_folders(resolved_paths, design_mode, flags)
-
-    if flags.open_document_theme and common.DEFAULT_DOCUMENT_THEME_DELAY_SECONDS > 0:
-        if design_mode and common.DESIGN_LOG_APP_LAUNCH:
-            logging.getLogger(__name__).info(
-                "[INFO] Esperando %s segundos antes de abrir aplicaciones...",
-                common.DEFAULT_DOCUMENT_THEME_DELAY_SECONDS,
-            )
-        time.sleep(common.DEFAULT_DOCUMENT_THEME_DELAY_SECONDS)
-
-    common.launch_office_apps(flags, design_mode)
+    _run_post_install_actions(base_dir, design_mode)
 
     if design_mode and common.DESIGN_LOG_INSTALLER:
         logging.getLogger(__name__).info(
@@ -167,6 +158,33 @@ def _resolve_design_mode() -> bool:
     if MANUAL_IS_DESIGN_MODE is not None:
         return bool(MANUAL_IS_DESIGN_MODE)
     return bool(common.DEFAULT_DESIGN_MODE)
+
+
+def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
+    scripts = [
+        "office_files_copy_allowed_destinations.py",
+        "office_files_copy_allowed_apps.py",
+    ]
+    script_dir = Path(__file__).resolve().parent
+    for script_name in scripts:
+        script_path = script_dir / script_name
+        if not script_path.exists():
+            if design_mode and common.DESIGN_LOG_INSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
+            else:
+                print(f"[WARN] No se encontró {script_path}")
+            continue
+        try:
+            subprocess.run([sys.executable, str(script_path), str(base_dir)], check=False)
+        except OSError as exc:
+            if design_mode and common.DESIGN_LOG_INSTALLER:
+                logging.getLogger(__name__).warning(
+                    "[WARN] No se pudo ejecutar %s (%s)",
+                    script_path,
+                    exc,
+                )
+            else:
+                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
 
 
 if __name__ == "__main__":
