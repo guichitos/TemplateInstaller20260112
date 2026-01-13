@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger(__name__).info("[INFO] Desinstalando desde: %s", base_dir)
 
     destinations = common.default_destinations()
-    open_flags = common.determine_uninstall_open_flags(base_dir, destinations, design_mode)
+    open_flags = common.InstallFlags()
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info(
             "[INFO] Rutas default: WORD=%s PPT=%s EXCEL=%s",
@@ -55,8 +55,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     common.log_template_folder_contents(common.resolve_template_paths(), design_mode)
     common.remove_normal_templates(design_mode)
-    common.remove_installed_templates(destinations, design_mode, base_dir)
-    common.delete_custom_copies(base_dir, destinations, design_mode)
+    common.remove_installed_templates(destinations, design_mode, base_dir, open_flags)
+    common.delete_custom_copies(base_dir, destinations, design_mode, open_flags)
     common.clear_mru_entries_for_payload(base_dir, destinations, design_mode)
     common.remove_normal_templates(design_mode)
     common.open_template_folders(common.resolve_template_paths(), design_mode, open_flags)

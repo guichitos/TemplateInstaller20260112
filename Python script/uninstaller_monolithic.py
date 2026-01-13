@@ -110,7 +110,6 @@ try:
         configure_logging,
         default_destinations,
         delete_custom_copies,
-        determine_uninstall_open_flags,
         ensure_parents_and_copy,
         exit_with_error,
         log_registry_sources,
@@ -866,7 +865,12 @@ except Exception:
                 exc,
             )
 
-    def remove_installed_templates(destinations: dict[str, Path], design_mode: bool, payload_dir: Path | None = None) -> None:
+    def remove_installed_templates(
+        destinations: dict[str, Path],
+        design_mode: bool,
+        payload_dir: Path | None = None,
+        flags: InstallFlags | None = None,
+    ) -> None:
         targets = {
             destinations["WORD"]: ["Normal.dotx", "Normal.dotm", "NormalEmail.dotx", "NormalEmail.dotm"],
             destinations["POWERPOINT"]: ["Blank.potx", "Blank.potm"],
@@ -882,6 +886,17 @@ except Exception:
                     if not target.exists():
                         _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] No existe %s", target)
                         continue
+                    if flags is not None:
+                        suffix = target.suffix.lower()
+                        if suffix in {".dotx", ".dotm"}:
+                            flags.open_word = True
+                            flags.open_roaming_folder = True
+                        if suffix in {".potx", ".potm"}:
+                            flags.open_ppt = True
+                            flags.open_roaming_folder = True
+                        if suffix in {".xltx", ".xltm"}:
+                            flags.open_excel = True
+                            flags.open_excel_startup_folder = True
                     backup_existing(target, design_mode)
                     _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminando %s", target)
                     target.unlink()
@@ -924,82 +939,46 @@ except Exception:
             except OSError as exc:
                 _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[ERROR] No se pudo eliminar %s (%s)", target, exc)
 
-    def delete_custom_copies(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
-        for file in iter_template_files(base_dir):
-            if file.name in BASE_TEMPLATE_NAMES:
-                continue
-            for dest in destinations.values():
-                candidate = normalize_path(dest / file.name)
-                try:
-                    if candidate.exists():
-                        if design_mode:
-                            print(f"[DELETE] Eliminando archivo: {candidate}")
-                        candidate.unlink()
-                        _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", candidate)
-                except OSError as exc:
-                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", candidate, exc)
-
-    def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> InstallFlags:
-        flags = InstallFlags()
-        roaming = destinations["ROAMING"]
-        excel = destinations["EXCEL"]
-        theme = destinations.get("THEMES")
-        custom_word = destinations["WORD_CUSTOM"]
-        custom_ppt = destinations["POWERPOINT_CUSTOM"]
-        custom_excel = destinations["EXCEL_CUSTOM"]
-        custom_additional = destinations["CUSTOM_ALT"]
-        base_targets = ("Normal.dotx", "Normal.dotm", "NormalEmail.dotx", "NormalEmail.dotm", "Blank.potx", "Blank.potm")
-        for name in base_targets:
-            candidate = normalize_path(roaming / name)
-            if candidate.exists():
-                flags.open_roaming_folder = True
-                if name.lower().endswith((".dotx", ".dotm")):
-                    flags.open_word = True
-                if name.lower().endswith((".potx", ".potm")):
-                    flags.open_ppt = True
-                break
-        excel_targets = ("Book.xltx", "Book.xltm", "Sheet.xltx", "Sheet.xltm")
-        for name in excel_targets:
-            candidate = normalize_path(excel / name)
-            if candidate.exists():
-                flags.open_excel_startup_folder = True
-                flags.open_excel = True
-                break
-        if theme is not None and design_mode:
-            print(f"[ANALYZE] Revisando carpeta de temas: {theme}")
-        if theme is not None and theme.exists():
-            flags.open_theme_folder = True
-            flags.open_document_theme = True
+    def delete_custom_copies(
+        base_dir: Path,
+        destinations: dict[str, Path],
+        design_mode: bool,
+        flags: InstallFlags | None = None,
+    ) -> None:
         for file in iter_template_files(base_dir):
             if file.name in BASE_TEMPLATE_NAMES:
                 continue
             extension = file.suffix.lower()
             for dest in destinations.values():
                 candidate = normalize_path(dest / file.name)
-                if not candidate.exists():
-                    continue
-                if dest == roaming:
-                    flags.open_roaming_folder = True
-                if dest == excel:
-                    flags.open_excel_startup_folder = True
-                if dest == custom_word and extension in {".dotx", ".dotm"}:
-                    flags.open_custom_word_folder = True
-                if dest == custom_ppt and extension in {".potx", ".potm", ".thmx"}:
-                    flags.open_custom_ppt_folder = True
-                if dest in {custom_excel, custom_additional} and extension in {".xltx", ".xltm"}:
-                    flags.open_custom_excel_folder = True
-                if extension in {".dotx", ".dotm"}:
-                    flags.open_word = True
-                if extension in {".potx", ".potm", ".thmx"}:
-                    flags.open_ppt = True
-                if extension in {".xltx", ".xltm"}:
-                    flags.open_excel = True
-            if extension == ".thmx":
-                if design_mode:
-                    print(f"[ANALYZE] Detectado tema en payload: {file}")
-                flags.open_theme_folder = True
-                flags.open_document_theme = True
-        return flags
+                try:
+                    if candidate.exists():
+                        if flags is not None:
+                            if extension in {".dotx", ".dotm"}:
+                                flags.open_word = True
+                            if extension in {".potx", ".potm", ".thmx"}:
+                                flags.open_ppt = True
+                            if extension in {".xltx", ".xltm"}:
+                                flags.open_excel = True
+                            if dest == destinations.get("ROAMING"):
+                                flags.open_roaming_folder = True
+                            if dest == destinations.get("EXCEL"):
+                                flags.open_excel_startup_folder = True
+                            if dest == destinations.get("WORD_CUSTOM") and extension in {".dotx", ".dotm"}:
+                                flags.open_custom_word_folder = True
+                            if dest == destinations.get("POWERPOINT_CUSTOM") and extension in {".potx", ".potm", ".thmx"}:
+                                flags.open_custom_ppt_folder = True
+                            if dest in {destinations.get("EXCEL_CUSTOM"), destinations.get("CUSTOM_ALT")} and extension in {".xltx", ".xltm"}:
+                                flags.open_custom_excel_folder = True
+                            if dest == destinations.get("THEMES") and extension == ".thmx":
+                                flags.open_theme_folder = True
+                                flags.open_document_theme = True
+                        if design_mode:
+                            print(f"[DELETE] Eliminando archivo: {candidate}")
+                        candidate.unlink()
+                        _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", candidate)
+                except OSError as exc:
+                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", candidate, exc)
 
     def clear_mru_entries_for_payload(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
         if not is_windows() or winreg is None:
@@ -1144,10 +1123,10 @@ def main(argv: list[str] | None = None) -> int:
     _print_intro(base_dir, design_mode)
 
     destinations = default_destinations()
-    open_flags = determine_uninstall_open_flags(base_dir, destinations, design_mode)
+    open_flags = InstallFlags()
     remove_normal_templates(design_mode)
-    remove_installed_templates(destinations, design_mode, base_dir)
-    delete_custom_copies(base_dir, destinations, design_mode)
+    remove_installed_templates(destinations, design_mode, base_dir, open_flags)
+    delete_custom_copies(base_dir, destinations, design_mode, open_flags)
     clear_mru_entries_for_payload(base_dir, destinations, design_mode)
     remove_normal_templates(design_mode)
     open_template_folders(resolve_template_paths(), design_mode, open_flags)
