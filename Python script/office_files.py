@@ -62,7 +62,7 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
                     "name": path.name,
                     "path": str(path),
                     "extension": path.suffix.lower(),
-                    "destination": str((destination_root / path.name).resolve()) if destination_root else "",
+                    "destination": str(destination_root.resolve()) if destination_root else "",
                     "copy": copy_allowed,
                 }
             )
