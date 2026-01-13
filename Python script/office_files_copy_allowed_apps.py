@@ -58,16 +58,10 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         help="Carpeta a escanear (por defecto, la carpeta actual).",
     )
-    parser.add_argument(
-        "--open",
-        action="store_true",
-        help="Abrir las aplicaciones detectadas en el listado.",
-    )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     apps = iter_copy_allowed_apps(base_dir)
-    if args.open:
-        launch_apps(apps)
+    launch_apps(apps)
     print({"apps": apps})
     return 0
 
