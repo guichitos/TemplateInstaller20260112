@@ -5,6 +5,8 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
+import path_utils
+
 OFFICE_EXTENSIONS = (
     ".dotx",
     ".dotm",
@@ -42,13 +44,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Carpeta a escanear (por defecto, la carpeta actual).",
     )
     args = parser.parse_args(argv)
-    base_dir = Path(args.base_dir)
+    base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     items = iter_office_files(base_dir)
-    ext_width = max((len(item["extension"]) for item in items), default=len("extension"))
     name_width = max((len(item["name"]) for item in items), default=len("name"))
-    print(f"{'extension':<{ext_width}}  {'name':<{name_width}}  path")
+    print(f"{'name':<{name_width}}  {'extension':<9}  path")
     for item in items:
-        print(f"{item['extension']:<{ext_width}}  {item['name']:<{name_width}}  {item['path']}")
+        path = str((base_dir / item["name"]).resolve())
+        print(f"{item['name']:<{name_width}}  {item['extension']:<9}  {path}")
     return 0
 
 
