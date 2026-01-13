@@ -140,3 +140,14 @@ def resolve_base_paths() -> dict[str, Path]:
     }
     _log_paths_if_design_mode(paths)
     return paths
+
+
+def _print_paths() -> None:
+    paths = resolve_base_paths()
+    print("[PATHS] Rutas resueltas:")
+    for key, value in paths.items():
+        print(f"[PATHS] {key} = {value}")
+
+
+if __name__ == "__main__":
+    _print_paths()
