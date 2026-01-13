@@ -44,8 +44,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     base_dir = Path(args.base_dir)
     items = iter_office_files(base_dir)
+    ext_width = max((len(item["extension"]) for item in items), default=len("extension"))
+    name_width = max((len(item["name"]) for item in items), default=len("name"))
+    print(f"{'extension':<{ext_width}}  {'name':<{name_width}}  path")
     for item in items:
-        print(f"{item['extension']}\t{item['name']}\t{item['path']}")
+        print(f"{item['extension']:<{ext_width}}  {item['name']:<{name_width}}  {item['path']}")
     return 0
 
 
