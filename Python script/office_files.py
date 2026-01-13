@@ -60,8 +60,13 @@ def _resolve_template_paths() -> dict[str, Path]:
     }
 
 
-def _destination_for_file(name: str, extension: str, paths: dict[str, Path]) -> Path | None:
-    if name in BASE_TEMPLATE_NAMES:
+def resolve_destination_for_name(
+    name: str,
+    paths: dict[str, Path],
+    base_names: Iterable[str] = BASE_TEMPLATE_NAMES,
+) -> Path | None:
+    extension = Path(name).suffix.lower()
+    if name in base_names:
         if name.startswith(("Normal.", "NormalEmail.", "Blank.")):
             return paths["ROAMING"]
         if name.startswith(("Book.", "Sheet.")):
@@ -85,7 +90,7 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
         for path in base_dir.glob(f"*{ext}"):
             if not path.is_file():
                 continue
-            destination_root = _destination_for_file(path.name, path.suffix.lower(), paths)
+            destination_root = resolve_destination_for_name(path.name, paths)
             items.append(
                 {
                     "name": path.name,
