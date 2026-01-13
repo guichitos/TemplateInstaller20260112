@@ -122,10 +122,9 @@ def _log_paths_if_design_mode(paths: dict[str, Path]) -> None:
 def resolve_base_paths() -> dict[str, Path]:
     documents_path = _resolve_documents_path()
     default_custom_dir = documents_path / "Custom Office Templates"
-    default_custom_alt_dir = documents_path / "Plantillas personalizadas de Office"
     custom_word = _resolve_custom_template_path(default_custom_dir)
-    custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_alt_dir)
-    custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_alt_dir)
+    custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_dir)
+    custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_dir)
     appdata_path = _resolve_appdata_path()
     paths = {
         "APPDATA": appdata_path,
@@ -133,7 +132,6 @@ def resolve_base_paths() -> dict[str, Path]:
         "CUSTOM_WORD": custom_word,
         "CUSTOM_PPT": custom_ppt,
         "CUSTOM_EXCEL": custom_excel,
-        "CUSTOM_ADDITIONAL": default_custom_alt_dir,
         "THEME": appdata_path / "Microsoft" / "Templates" / "Document Themes",
         "ROAMING": appdata_path / "Microsoft" / "Templates",
         "EXCEL_STARTUP": appdata_path / "Microsoft" / "Excel" / "XLSTART",

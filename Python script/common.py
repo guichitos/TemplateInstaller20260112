@@ -118,9 +118,6 @@ DEFAULT_POWERPOINT_TEMPLATE_PATH = normalize_path(
 DEFAULT_EXCEL_TEMPLATE_PATH = normalize_path(
     os.environ.get("EXCEL_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_EXCEL"])
 )
-DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH = normalize_path(
-    os.environ.get("CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_ADDITIONAL"])
-)
 DEFAULT_ROAMING_TEMPLATE_FOLDER = normalize_path(
     os.environ.get("ROAMING_TEMPLATE_FOLDER_PATH", _BASE_PATHS["ROAMING"])
 )
@@ -377,9 +374,6 @@ def install_template(
     if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
         flags.custom_selection = destination
         flags.open_custom_word_folder = True
-    if destination_root == DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH:
-        flags.custom_selection = flags.custom_selection or destination
-        flags.open_custom_excel_folder = True
     if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER and filename.lower().endswith(".thmx"):
         flags.open_document_theme = True
         flags.document_theme_selection = destination
@@ -445,7 +439,7 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             flags.open_custom_word_folder = True
         if destination_root == DEFAULT_POWERPOINT_TEMPLATE_PATH or destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
             flags.open_custom_ppt_folder = True
-        if destination_root == DEFAULT_EXCEL_TEMPLATE_PATH or destination_root == DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH:
+        if destination_root == DEFAULT_EXCEL_TEMPLATE_PATH:
             flags.open_custom_excel_folder = True
         if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER:
             flags.roaming_selection = destination_root / filename
@@ -457,7 +451,7 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             flags.open_document_theme = True
             flags.document_theme_selection = destination_root / filename
             flags.open_ppt = True
-        if destination_root in {DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH, DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH}:
+        if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
             flags.custom_selection = flags.custom_selection or destination_root / filename
 
 
@@ -587,7 +581,7 @@ def delete_custom_copies(
                             flags.open_custom_word_folder = True
                         if dest == destinations.get("POWERPOINT_CUSTOM") and extension in {".potx", ".potm", ".thmx"}:
                             flags.open_custom_ppt_folder = True
-                        if dest in {destinations.get("EXCEL_CUSTOM"), destinations.get("CUSTOM_ALT")} and extension in {".xltx", ".xltm"}:
+                        if dest == destinations.get("EXCEL_CUSTOM") and extension in {".xltx", ".xltm"}:
                             flags.open_custom_excel_folder = True
                         if dest == destinations.get("THEMES") and extension == ".thmx":
                             flags.open_theme_folder = True
@@ -653,7 +647,6 @@ def open_template_folders(paths: dict[str, Path], design_mode: bool, flags: Inst
         ("CUSTOM_EXCEL_TEMPLATE_PATH", "open_custom_excel_folder", paths.get("CUSTOM_EXCEL")),
         ("ROAMING_TEMPLATE_PATH", "open_roaming_folder", paths.get("ROAMING")),
         ("EXCEL_STARTUP_PATH", "open_excel_startup_folder", paths.get("EXCEL")),
-        ("CUSTOM_ADDITIONAL_PATH", "open_custom_excel_folder", paths.get("CUSTOM_ADDITIONAL")),
     ]
     for label, flag_name, target in ordered:
         if target is None:
@@ -691,7 +684,7 @@ def _mark_folder_open_flag(destination_root: Path, flags: InstallFlags, destinat
         flags.open_custom_word_folder = True
     if destination_root == destinations.get("POWERPOINT_CUSTOM"):
         flags.open_custom_ppt_folder = True
-    if destination_root in {destinations.get("EXCEL_CUSTOM"), destinations.get("CUSTOM_ALT")}:
+    if destination_root == destinations.get("EXCEL_CUSTOM"):
         flags.open_custom_excel_folder = True
     if destination_root == destinations.get("ROAMING"):
         flags.open_roaming_folder = True
@@ -836,7 +829,6 @@ def default_destinations() -> dict[str, Path]:
         "POWERPOINT": paths["ROAMING"],
         "EXCEL": paths["EXCEL"],
         "CUSTOM": paths["CUSTOM_WORD"],
-        "CUSTOM_ALT": paths["CUSTOM_ADDITIONAL"],
         "WORD_CUSTOM": paths["CUSTOM_WORD"],
         "POWERPOINT_CUSTOM": paths["CUSTOM_PPT"],
         "EXCEL_CUSTOM": paths["CUSTOM_EXCEL"],
@@ -851,7 +843,6 @@ def resolve_template_paths() -> dict[str, Path]:
         "CUSTOM_WORD": DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
         "CUSTOM_PPT": DEFAULT_POWERPOINT_TEMPLATE_PATH or DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
         "CUSTOM_EXCEL": DEFAULT_EXCEL_TEMPLATE_PATH or DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
-        "CUSTOM_ADDITIONAL": DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH,
         "ROAMING": DEFAULT_ROAMING_TEMPLATE_FOLDER,
         "EXCEL": DEFAULT_EXCEL_STARTUP_FOLDER,
     }
@@ -866,7 +857,6 @@ def log_template_paths(paths: dict[str, Path], design_mode: bool) -> None:
     logger.info("CUSTOM_WORD_TEMPLATE_PATH   = %s", paths["CUSTOM_WORD"])
     logger.info("CUSTOM_PPT_TEMPLATE_PATH    = %s", paths["CUSTOM_PPT"])
     logger.info("CUSTOM_EXCEL_TEMPLATE_PATH  = %s", paths["CUSTOM_EXCEL"])
-    logger.info("CUSTOM_ADDITIONAL_PATH      = %s", paths["CUSTOM_ADDITIONAL"])
     logger.info("ROAMING_TEMPLATE_PATH       = %s", paths["ROAMING"])
     logger.info("EXCEL_STARTUP_PATH          = %s", paths["EXCEL"])
     logger.info("====================================================")
@@ -883,7 +873,6 @@ def log_template_folder_contents(paths: dict[str, Path], design_mode: bool) -> N
         ("CUSTOM_EXCEL_TEMPLATE_PATH", paths["CUSTOM_EXCEL"]),
         ("ROAMING_TEMPLATE_PATH", paths["ROAMING"]),
         ("EXCEL_STARTUP_PATH", paths["EXCEL"]),
-        ("CUSTOM_ADDITIONAL_PATH", paths["CUSTOM_ADDITIONAL"]),
     ]
     for label, folder in targets:
         try:

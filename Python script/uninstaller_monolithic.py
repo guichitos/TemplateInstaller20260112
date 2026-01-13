@@ -60,7 +60,6 @@ try:
         AUTHOR_VALIDATION_ENABLED,
         BASE_TEMPLATE_NAMES,
         DEFAULT_ALLOWED_TEMPLATE_AUTHORS,
-        DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH,
         DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
         DEFAULT_DOCUMENT_THEME_DELAY_SECONDS,
         DEFAULT_EXCEL_STARTUP_FOLDER,
@@ -215,10 +214,9 @@ except Exception:
     def _resolve_base_paths() -> dict[str, Path]:
         documents_path = _resolve_documents_path()
         default_custom_dir = documents_path / "Custom Office Templates"
-        default_custom_alt_dir = documents_path / "Plantillas personalizadas de Office"
-        custom_word = _resolve_custom_template_path(default_custom_dir)
-        custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_alt_dir)
-        custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_alt_dir)
+    custom_word = _resolve_custom_template_path(default_custom_dir)
+    custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_dir)
+    custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_dir)
         appdata_path = _resolve_appdata_path()
         return {
             "APPDATA": appdata_path,
@@ -226,7 +224,6 @@ except Exception:
             "CUSTOM_WORD": custom_word,
             "CUSTOM_PPT": custom_ppt,
             "CUSTOM_EXCEL": custom_excel,
-            "CUSTOM_ADDITIONAL": default_custom_alt_dir,
             "THEME": appdata_path / "Microsoft" / "Templates" / "Document Themes",
             "ROAMING": appdata_path / "Microsoft" / "Templates",
             "EXCEL_STARTUP": appdata_path / "Microsoft" / "Excel" / "XLSTART",
@@ -316,9 +313,6 @@ except Exception:
     DEFAULT_EXCEL_TEMPLATE_PATH = normalize_path(
         os.environ.get("EXCEL_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_EXCEL"])
     )
-    DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH = normalize_path(
-        os.environ.get("CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_ADDITIONAL"])
-    )
     DEFAULT_ROAMING_TEMPLATE_FOLDER = normalize_path(
         os.environ.get("ROAMING_TEMPLATE_FOLDER_PATH", _BASE_PATHS["ROAMING"])
     )
@@ -333,7 +327,6 @@ except Exception:
             "CUSTOM_WORD": DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
             "CUSTOM_PPT": DEFAULT_POWERPOINT_TEMPLATE_PATH or DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
             "CUSTOM_EXCEL": DEFAULT_EXCEL_TEMPLATE_PATH or DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
-            "CUSTOM_ADDITIONAL": DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH,
             "ROAMING": DEFAULT_ROAMING_TEMPLATE_FOLDER,
             "EXCEL": DEFAULT_EXCEL_STARTUP_FOLDER,
         }
@@ -345,7 +338,6 @@ except Exception:
             "POWERPOINT": paths["ROAMING"],
             "EXCEL": paths["EXCEL"],
             "CUSTOM": paths["CUSTOM_WORD"],
-            "CUSTOM_ALT": paths["CUSTOM_ADDITIONAL"],
             "WORD_CUSTOM": paths["CUSTOM_WORD"],
             "POWERPOINT_CUSTOM": paths["CUSTOM_PPT"],
             "EXCEL_CUSTOM": paths["CUSTOM_EXCEL"],
@@ -376,7 +368,6 @@ except Exception:
         logger.info("CUSTOM_WORD_TEMPLATE_PATH   = %s", paths["CUSTOM_WORD"])
         logger.info("CUSTOM_PPT_TEMPLATE_PATH    = %s", paths["CUSTOM_PPT"])
         logger.info("CUSTOM_EXCEL_TEMPLATE_PATH  = %s", paths["CUSTOM_EXCEL"])
-        logger.info("CUSTOM_ADDITIONAL_PATH      = %s", paths["CUSTOM_ADDITIONAL"])
         logger.info("ROAMING_TEMPLATE_PATH       = %s", paths["ROAMING"])
         logger.info("EXCEL_STARTUP_PATH          = %s", paths["EXCEL"])
         logger.info("====================================================")
@@ -523,8 +514,8 @@ except Exception:
             flags.open_custom_word_folder = True
         if destination_root == destinations.get("POWERPOINT_CUSTOM"):
             flags.open_custom_ppt_folder = True
-        if destination_root in {destinations.get("EXCEL_CUSTOM"), destinations.get("CUSTOM_ALT")}:
-            flags.open_custom_excel_folder = True
+    if destination_root == destinations.get("EXCEL_CUSTOM"):
+        flags.open_custom_excel_folder = True
         if destination_root == destinations.get("ROAMING"):
             flags.open_roaming_folder = True
         if destination_root == destinations.get("EXCEL"):
@@ -815,7 +806,6 @@ except Exception:
             ("CUSTOM_EXCEL_TEMPLATE_PATH", "open_custom_excel_folder", paths.get("CUSTOM_EXCEL")),
             ("ROAMING_TEMPLATE_PATH", "open_roaming_folder", paths.get("ROAMING")),
             ("EXCEL_STARTUP_PATH", "open_excel_startup_folder", paths.get("EXCEL")),
-            ("CUSTOM_ADDITIONAL_PATH", "open_custom_excel_folder", paths.get("CUSTOM_ADDITIONAL")),
         ]
         for label, flag_name, target in ordered:
             if target is None:
@@ -974,7 +964,7 @@ except Exception:
                                 flags.open_custom_word_folder = True
                             if dest == destinations.get("POWERPOINT_CUSTOM") and extension in {".potx", ".potm", ".thmx"}:
                                 flags.open_custom_ppt_folder = True
-                            if dest in {destinations.get("EXCEL_CUSTOM"), destinations.get("CUSTOM_ALT")} and extension in {".xltx", ".xltm"}:
+                            if dest == destinations.get("EXCEL_CUSTOM") and extension in {".xltx", ".xltm"}:
                                 flags.open_custom_excel_folder = True
                             if dest == destinations.get("THEMES") and extension == ".thmx":
                                 flags.open_theme_folder = True
@@ -1062,7 +1052,7 @@ except Exception:
                 flags.open_custom_word_folder = True
             if destination_root == DEFAULT_POWERPOINT_TEMPLATE_PATH or destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
                 flags.open_custom_ppt_folder = True
-            if destination_root == DEFAULT_EXCEL_TEMPLATE_PATH or destination_root == DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH:
+            if destination_root == DEFAULT_EXCEL_TEMPLATE_PATH:
                 flags.open_custom_excel_folder = True
             if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER:
                 flags.roaming_selection = destination_root / filename
@@ -1073,7 +1063,7 @@ except Exception:
             if extension == ".thmx":
                 flags.open_document_theme = True
                 flags.document_theme_selection = destination_root / filename
-            if destination_root in {DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH, DEFAULT_CUSTOM_OFFICE_ADDITIONAL_TEMPLATE_PATH}:
+            if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
                 flags.custom_selection = flags.custom_selection or destination_root / filename
 
     def _update_mru_if_applicable(app_label: str, destination: Path, design_mode: bool) -> None:
