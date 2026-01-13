@@ -4,13 +4,38 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
+
+import author_validation
 
 
 def normalize_path(path: Path | str | None) -> Path:
     if path is None:
         return Path()
     return Path(str(path).strip().rstrip("\\/"))
+
+
+def is_copy_allowed(
+    path: Path,
+    allowed_authors: Iterable[str] | None = None,
+    validation_enabled: Optional[bool] = None,
+) -> bool:
+    if validation_enabled is None:
+        validation_enabled = author_validation.AUTHOR_VALIDATION_ENABLED
+    result = author_validation.check_template_author(
+        path,
+        allowed_authors=allowed_authors,
+        validation_enabled=validation_enabled,
+    )
+    return result.allowed
+
+
+def format_copy_column(
+    path: Path,
+    allowed_authors: Iterable[str] | None = None,
+    validation_enabled: Optional[bool] = None,
+) -> str:
+    return "true" if is_copy_allowed(path, allowed_authors, validation_enabled) else "false"
 
 
 _WINREG_SPEC = importlib.util.find_spec("winreg")

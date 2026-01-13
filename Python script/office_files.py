@@ -56,12 +56,14 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
             if not path.is_file():
                 continue
             destination_root = office_destination.resolve_destination_for_name(path.name, paths)
+            copy_allowed = path_utils.format_copy_column(path)
             items.append(
                 {
                     "name": path.name,
                     "path": str(path),
                     "extension": path.suffix.lower(),
                     "destination": str((destination_root / path.name).resolve()) if destination_root else "",
+                    "copy": copy_allowed,
                 }
             )
     return items
@@ -79,9 +81,14 @@ def main(argv: list[str] | None = None) -> int:
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     items = iter_office_files(base_dir)
     name_width = max((len(item["name"]) for item in items), default=len("name"))
-    print(f"{'name':<{name_width}}  {'extension':<9}  destination")
+    print(f"{'name':<{name_width}}  {'extension':<9}  {'copy':<5}  destination")
     for item in items:
-        print(f"{item['name']:<{name_width}}  {item['extension']:<9}  {item['destination']}")
+        print(
+            f"{item['name']:<{name_width}}  "
+            f"{item['extension']:<9}  "
+            f"{item['copy']:<5}  "
+            f"{item['destination']}"
+        )
     return 0
 
 
