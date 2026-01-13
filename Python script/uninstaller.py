@@ -60,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     common.clear_mru_entries_for_payload(base_dir, destinations, design_mode)
     common.remove_normal_templates(design_mode)
     common.open_template_folders(common.resolve_template_paths(), design_mode, open_flags)
+    common.launch_office_apps(open_flags, design_mode)
 
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info("[FINAL] Desinstalación completada.")

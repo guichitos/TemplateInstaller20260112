@@ -953,12 +953,17 @@ except Exception:
             candidate = normalize_path(roaming / name)
             if candidate.exists():
                 flags.open_roaming_folder = True
+                if name.lower().endswith((".dotx", ".dotm")):
+                    flags.open_word = True
+                if name.lower().endswith((".potx", ".potm")):
+                    flags.open_ppt = True
                 break
         excel_targets = ("Book.xltx", "Book.xltm", "Sheet.xltx", "Sheet.xltm")
         for name in excel_targets:
             candidate = normalize_path(excel / name)
             if candidate.exists():
                 flags.open_excel_startup_folder = True
+                flags.open_excel = True
                 break
         if theme is not None and design_mode:
             print(f"[ANALYZE] Revisando carpeta de temas: {theme}")
@@ -982,6 +987,12 @@ except Exception:
                     flags.open_custom_ppt_folder = True
                 if dest in {custom_excel, custom_additional}:
                     flags.open_custom_excel_folder = True
+                if file.suffix.lower() in {".dotx", ".dotm"}:
+                    flags.open_word = True
+                if file.suffix.lower() in {".potx", ".potm", ".thmx"}:
+                    flags.open_ppt = True
+                if file.suffix.lower() in {".xltx", ".xltm"}:
+                    flags.open_excel = True
             if file.suffix.lower() == ".thmx":
                 if design_mode:
                     print(f"[ANALYZE] Detectado tema en payload: {file}")
@@ -1139,6 +1150,7 @@ def main(argv: list[str] | None = None) -> int:
     clear_mru_entries_for_payload(base_dir, destinations, design_mode)
     remove_normal_templates(design_mode)
     open_template_folders(resolve_template_paths(), design_mode, open_flags)
+    launch_office_apps(open_flags, design_mode)
     if design_mode and DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info("[FINAL] Desinstalación completada.")
     else:
