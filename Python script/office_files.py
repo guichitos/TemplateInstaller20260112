@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Iterable
 
+import office_destination
 import path_utils
 
 OFFICE_EXTENSIONS = (
@@ -17,20 +18,6 @@ OFFICE_EXTENSIONS = (
     ".xltm",
     ".thmx",
 )
-
-BASE_TEMPLATE_NAMES = {
-    "Normal.dotx",
-    "Normal.dotm",
-    "NormalEmail.dotx",
-    "NormalEmail.dotm",
-    "Blank.potx",
-    "Blank.potm",
-    "Book.xltx",
-    "Book.xltm",
-    "Sheet.xltx",
-    "Sheet.xltm",
-}
-
 
 def _resolve_template_paths() -> dict[str, Path]:
     base_paths = path_utils.resolve_base_paths()
@@ -60,28 +47,6 @@ def _resolve_template_paths() -> dict[str, Path]:
     }
 
 
-def resolve_destination_for_name(
-    name: str,
-    paths: dict[str, Path],
-    base_names: Iterable[str] = BASE_TEMPLATE_NAMES,
-) -> Path | None:
-    extension = Path(name).suffix.lower()
-    if name in base_names:
-        if name.startswith(("Normal.", "NormalEmail.", "Blank.")):
-            return paths["ROAMING"]
-        if name.startswith(("Book.", "Sheet.")):
-            return paths["EXCEL"]
-    if extension in {".dotx", ".dotm"}:
-        return paths["CUSTOM_WORD"]
-    if extension in {".potx", ".potm"}:
-        return paths["CUSTOM_PPT"]
-    if extension in {".xltx", ".xltm"}:
-        return paths["CUSTOM_EXCEL"]
-    if extension == ".thmx":
-        return paths["THEME"]
-    return None
-
-
 def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSIONS) -> list[dict[str, str]]:
     base_dir = Path(base_dir)
     paths = _resolve_template_paths()
@@ -90,7 +55,7 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
         for path in base_dir.glob(f"*{ext}"):
             if not path.is_file():
                 continue
-            destination_root = resolve_destination_for_name(path.name, paths)
+            destination_root = office_destination.resolve_destination_for_name(path.name, paths)
             items.append(
                 {
                     "name": path.name,
