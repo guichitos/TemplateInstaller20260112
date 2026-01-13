@@ -518,8 +518,10 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, result.message)
             continue
 
+        target_path = destination_root / filename
+        backup_existing(target_path, design_mode)
         try:
-            ensure_parents_and_copy(file, destination_root / filename)
+            ensure_parents_and_copy(file, target_path)
             flags.totals["files"] += 1
             _mark_folder_open_flag(destination_root, flags, destinations)
             _design_log(
@@ -528,9 +530,9 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
                 logging.INFO,
                 "[OK] Copiado %s a %s",
                 filename,
-                destination_root / filename,
+                target_path,
             )
-            _update_mru_if_applicable_extension(extension, destination_root / filename, design_mode)
+            _update_mru_if_applicable_extension(extension, target_path, design_mode)
         except OSError as exc:
             flags.totals["errors"] += 1
             _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
@@ -666,12 +668,17 @@ def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path]
         candidate = normalize_path(roaming / name)
         if candidate.exists():
             flags.open_roaming_folder = True
+            if name.lower().endswith((".dotx", ".dotm")):
+                flags.open_word = True
+            if name.lower().endswith((".potx", ".potm")):
+                flags.open_ppt = True
             break
     excel_targets = ("Book.xltx", "Book.xltm", "Sheet.xltx", "Sheet.xltm")
     for name in excel_targets:
         candidate = normalize_path(excel / name)
         if candidate.exists():
             flags.open_excel_startup_folder = True
+            flags.open_excel = True
             break
     if theme is not None and design_mode:
         print(f"[ANALYZE] Revisando carpeta de temas: {theme}")
@@ -695,6 +702,12 @@ def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path]
                 flags.open_custom_ppt_folder = True
             if dest in {custom_excel, custom_additional}:
                 flags.open_custom_excel_folder = True
+            if file.suffix.lower() in {".dotx", ".dotm"}:
+                flags.open_word = True
+            if file.suffix.lower() in {".potx", ".potm", ".thmx"}:
+                flags.open_ppt = True
+            if file.suffix.lower() in {".xltx", ".xltm"}:
+                flags.open_excel = True
         if file.suffix.lower() == ".thmx":
             if design_mode:
                 print(f"[ANALYZE] Detectado tema en payload: {file}")
