@@ -917,7 +917,10 @@ except Exception:
                 summary,
             )
 
-    def remove_normal_templates(design_mode: bool) -> None:
+    def remove_normal_templates(
+        design_mode: bool,
+        flags: InstallFlags | None = None,
+    ) -> None:
         template_dir = resolve_template_paths()["ROAMING"]
         _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, '[INFO] Ruta obtenida desde common.resolve_template_paths()["ROAMING"]')
         _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Ruta de plantillas (ROAMING): %s", template_dir)
@@ -931,6 +934,9 @@ except Exception:
                 _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[SKIP] No existe: %s", target)
                 continue
             try:
+                if flags is not None:
+                    flags.open_word = True
+                    flags.open_roaming_folder = True
                 target.unlink()
                 if target.exists():
                     _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Persistió tras borrar: %s", target)
@@ -1124,11 +1130,11 @@ def main(argv: list[str] | None = None) -> int:
 
     destinations = default_destinations()
     open_flags = InstallFlags()
-    remove_normal_templates(design_mode)
+    remove_normal_templates(design_mode, flags=open_flags)
     remove_installed_templates(destinations, design_mode, base_dir, open_flags)
     delete_custom_copies(base_dir, destinations, design_mode, open_flags)
     clear_mru_entries_for_payload(base_dir, destinations, design_mode)
-    remove_normal_templates(design_mode)
+    remove_normal_templates(design_mode, flags=open_flags)
     open_template_folders(resolve_template_paths(), design_mode, open_flags)
     launch_office_apps(open_flags, design_mode)
     if design_mode and DESIGN_LOG_UNINSTALLER:

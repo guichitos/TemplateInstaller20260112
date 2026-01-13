@@ -629,7 +629,11 @@ def remove_installed_templates(
         )
 
 
-def remove_normal_templates(design_mode: bool, emit: Callable[[str], None] | None = None) -> None:
+def remove_normal_templates(
+    design_mode: bool,
+    emit: Callable[[str], None] | None = None,
+    flags: InstallFlags | None = None,
+) -> None:
     if emit is None:
         emit = lambda message: _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, message)
     template_dir = resolve_template_paths()["ROAMING"]
@@ -645,6 +649,9 @@ def remove_normal_templates(design_mode: bool, emit: Callable[[str], None] | Non
             emit(f"[SKIP] No existe: {target}")
             continue
         try:
+            if flags is not None:
+                flags.open_word = True
+                flags.open_roaming_folder = True
             target.unlink()
             if target.exists():
                 emit(f"[WARN] Persistió tras borrar: {target}")
