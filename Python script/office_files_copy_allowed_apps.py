@@ -37,10 +37,12 @@ def launch_apps(apps: list[str]) -> None:
         if not exe:
             continue
         try:
+            print(f"[OPEN] Intentando abrir {app} ({exe}) con startfile.")
             os.startfile(exe)  # type: ignore[arg-type]
         except OSError as exc:
             print(f"[WARN] No se pudo iniciar {app} con startfile ({exc}); reintentando con cmd.")
             try:
+                print(f"[OPEN] Intentando abrir {app} ({exe}) con cmd start.")
                 subprocess.run(["cmd", "/c", "start", "", exe], check=False)
             except OSError as retry_exc:
                 print(f"[WARN] No se pudo iniciar {app} con cmd ({retry_exc})")
