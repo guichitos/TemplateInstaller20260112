@@ -501,8 +501,10 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, result.message)
             continue
 
+        target_path = destination_root / filename
+        backup_existing(target_path, design_mode)
         try:
-            ensure_parents_and_copy(file, destination_root / filename)
+            ensure_parents_and_copy(file, target_path)
             flags.totals["files"] += 1
             _mark_folder_open_flag(destination_root, flags, destinations)
             _design_log(
@@ -511,9 +513,9 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
                 logging.INFO,
                 "[OK] Copiado %s a %s",
                 filename,
-                destination_root / filename,
+                target_path,
             )
-            _update_mru_if_applicable_extension(extension, destination_root / filename, design_mode)
+            _update_mru_if_applicable_extension(extension, target_path, design_mode)
         except OSError as exc:
             flags.totals["errors"] += 1
             _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
