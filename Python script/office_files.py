@@ -57,6 +57,7 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
                 continue
             destination_root = office_destination.resolve_destination_for_name(path.name, paths)
             copy_allowed = path_utils.format_copy_column(path)
+            app_label = _resolve_app_label(path.suffix.lower())
             items.append(
                 {
                     "name": path.name,
@@ -64,6 +65,7 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
                     "extension": path.suffix.lower(),
                     "destination": str(destination_root.resolve()) if destination_root else "",
                     "copy": copy_allowed,
+                    "app": app_label,
                 }
             )
     return items
@@ -81,15 +83,26 @@ def main(argv: list[str] | None = None) -> int:
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     items = iter_office_files(base_dir)
     name_width = max((len(item["name"]) for item in items), default=len("name"))
-    print(f"{'name':<{name_width}}  {'extension':<9}  {'copy':<5}  destination")
+    print(f"{'name':<{name_width}}  {'extension':<9}  {'copy':<5}  {'app':<10}  destination")
     for item in items:
         print(
             f"{item['name']:<{name_width}}  "
             f"{item['extension']:<9}  "
             f"{item['copy']:<5}  "
+            f"{item['app']:<10}  "
             f"{item['destination']}"
         )
     return 0
+
+
+def _resolve_app_label(extension: str) -> str:
+    if extension in {".dotx", ".dotm"}:
+        return "WORD"
+    if extension in {".potx", ".potm", ".thmx"}:
+        return "POWERPOINT"
+    if extension in {".xltx", ".xltm"}:
+        return "EXCEL"
+    return ""
 
 
 if __name__ == "__main__":

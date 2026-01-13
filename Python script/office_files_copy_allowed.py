@@ -27,12 +27,13 @@ def main(argv: list[str] | None = None) -> int:
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     items = iter_copy_allowed_files(base_dir)
     name_width = max((len(item["name"]) for item in items), default=len("name"))
-    print(f"{'name':<{name_width}}  {'extension':<9}  {'copy':<5}  destination")
+    print(f"{'name':<{name_width}}  {'extension':<9}  {'copy':<5}  {'app':<10}  destination")
     for item in items:
         print(
             f"{item['name']:<{name_width}}  "
             f"{item['extension']:<9}  "
             f"{item['copy']:<5}  "
+            f"{item['app']:<10}  "
             f"{item['destination']}"
         )
     return 0
