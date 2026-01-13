@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 from pathlib import Path
 
 import office_files_copy_allowed
@@ -38,7 +39,11 @@ def launch_apps(apps: list[str]) -> None:
         try:
             os.startfile(exe)  # type: ignore[arg-type]
         except OSError as exc:
-            print(f"[WARN] No se pudo iniciar {app} ({exc})")
+            print(f"[WARN] No se pudo iniciar {app} con startfile ({exc}); reintentando con cmd.")
+            try:
+                subprocess.run(["cmd", "/c", "start", "", exe], check=False)
+            except OSError as retry_exc:
+                print(f"[WARN] No se pudo iniciar {app} con cmd ({retry_exc})")
 
 
 def main(argv: list[str] | None = None) -> int:
