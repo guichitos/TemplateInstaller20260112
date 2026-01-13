@@ -6,12 +6,18 @@ import os
 import shutil
 import subprocess
 import sys
-import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, List, Optional, Set
-import xml.etree.ElementTree as ET
+from typing import Callable, Iterable, Optional, Set
+
+from author_validation import (
+    AUTHOR_VALIDATION_ENABLED,
+    DEFAULT_ALLOWED_TEMPLATE_AUTHORS,
+    SUPPORTED_TEMPLATE_EXTENSIONS,
+    check_template_author,
+    iter_template_files,
+)
 
 
 def normalize_path(path: Path | str | None) -> Path:
@@ -56,16 +62,10 @@ _BASE_PATHS = path_utils.resolve_base_paths()
 APPDATA_PATH = _BASE_PATHS["APPDATA"]
 DOCUMENTS_PATH = _BASE_PATHS["DOCUMENTS"]
 
-DEFAULT_ALLOWED_TEMPLATE_AUTHORS = [
-    "www.grada.cc",
-    "www.gradaz.com",
-]
-
 DEFAULT_DOCUMENT_THEME_DELAY_SECONDS = int(
     os.environ.get("DOCUMENT_THEME_OPEN_DELAY_SECONDS", "0") or 0
 )
 DEFAULT_DESIGN_MODE = os.environ.get("IsDesignModeEnabled", "false").lower() == "true"
-AUTHOR_VALIDATION_ENABLED = os.environ.get("AuthorValidationEnabled", "TRUE").lower() != "false"
 MRU_VALUE_PREFIX = "[F00000000][T01ED6D7E58D00000][O00000000]*"
 
 
@@ -126,16 +126,6 @@ DEFAULT_EXCEL_STARTUP_FOLDER = normalize_path(
 )
 DEFAULT_THEME_FOLDER = normalize_path(_BASE_PATHS["THEME"])
 
-SUPPORTED_TEMPLATE_EXTENSIONS = {
-    ".dotx",
-    ".dotm",
-    ".potx",
-    ".potm",
-    ".xltx",
-    ".xltm",
-    ".thmx",
-}
-
 BASE_TEMPLATE_NAMES = {
     "Normal.dotx",
     "Normal.dotm",
@@ -158,11 +148,6 @@ BASE_TEMPLATE_NAMES = {
 def ensure_directory(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def iter_template_files(base_dir: Path) -> Iterator[Path]:
-    for ext in SUPPORTED_TEMPLATE_EXTENSIONS:
-        yield from base_dir.glob(f"*{ext}")
 
 
 def resolve_base_directory(base_dir: Path) -> Path:
@@ -189,106 +174,6 @@ def _design_log(enabled: bool, design_mode: bool, level: int, message: str, *arg
         LOGGER.log(level, message, *args)
 
 
-# --------------------------------------------------------------------------- #
-# Autoría
-# --------------------------------------------------------------------------- #
-
-
-@dataclass
-class AuthorCheckResult:
-    allowed: bool
-    message: str
-    authors: List[str]
-    error: bool = False
-
-    def as_cli_output(self) -> str:
-        return "TRUE" if self.allowed and not self.error else "FALSE"
-
-
-def check_template_author(
-    target: Path,
-    allowed_authors: Iterable[str] | None = None,
-    validation_enabled: bool = True,
-    design_mode: bool = False,
-) -> AuthorCheckResult:
-    allowed = _normalize_allowed_authors(allowed_authors or DEFAULT_ALLOWED_TEMPLATE_AUTHORS)
-    target = normalize_path(target)
-
-    if not target.exists():
-        return AuthorCheckResult(
-            allowed=False,
-            message=f"[ERROR] No se encontró la ruta: \"{target}\"",
-            authors=[],
-            error=True,
-        )
-
-    if target.is_dir():
-        authors_found: list[str] = []
-        for file in iter_template_files(target):
-            if file.suffix.lower() == ".thmx":
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "Archivo: %s - Autor: [OMITIDO TEMA]", file.name)
-                continue
-            author, error = _extract_author(file)
-            if error:
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, error)
-            if author:
-                authors_found.append(author)
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "Archivo: %s - Autor: %s", file.name, author)
-            else:
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "Archivo: %s - Autor: [VACÍO]", file.name)
-
-        message = (
-            f"[INFO] Autores listados para la carpeta \"{target}\"."
-            if authors_found
-            else f"[WARN] No se encontraron plantillas en \"{target}\"."
-        )
-        return AuthorCheckResult(True, message, authors_found)
-
-    if not validation_enabled:
-        return AuthorCheckResult(True, "[INFO] Validación de autores deshabilitada.", [])
-
-    if target.suffix.lower() == ".thmx":
-        return AuthorCheckResult(True, "[INFO] Validación de autor omitida para temas.", [])
-
-    author, error = _extract_author(target)
-    if error:
-        return AuthorCheckResult(False, error, [], error=True)
-    if not author:
-        return AuthorCheckResult(False, f"[WARN] El archivo \"{target}\" no tiene autor asignado.", [])
-
-    is_allowed = any(author.lower() == a.lower() for a in allowed)
-    message = "[OK] Autor aprobado." if is_allowed else f"[BLOCKED] Autor no permitido para \"{target}\"."
-    return AuthorCheckResult(is_allowed, message, [author])
-
-
-def _normalize_allowed_authors(authors: Iterable[str]) -> list[str]:
-    normalized: list[str] = []
-    for author in authors:
-        cleaned = author.strip()
-        if cleaned:
-            normalized.append(cleaned)
-    return normalized
-
-
-def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
-    if not template_path.exists():
-        return None, f"[ERROR] No se encontró la ruta: \"{template_path}\""
-
-    try:
-        with zipfile.ZipFile(template_path) as zipped:
-            try:
-                with zipped.open("docProps/core.xml") as core_file:
-                    tree = ET.fromstring(core_file.read())
-            except KeyError:
-                return None, f"[WARN] No se pudo obtener el autor para \"{template_path.name}\" (core.xml ausente)."
-    except Exception as exc:  # noqa: BLE001
-        return None, f"[ERROR] {template_path.name}: {exc}"
-
-    for candidate in ("{http://purl.org/dc/elements/1.1/}creator", "creator"):
-        node = tree.find(candidate)
-        if node is not None and node.text:
-            return node.text.strip(), None
-    return None, f"[WARN] \"{template_path.name}\" sin autor definido."
 
 
 # --------------------------------------------------------------------------- #
@@ -340,6 +225,13 @@ def install_template(
         allowed_authors=allowed_authors,
         validation_enabled=validation_enabled,
         design_mode=design_mode,
+        log_callback=lambda level, message, *args: _design_log(
+            DESIGN_LOG_AUTHOR,
+            design_mode,
+            level,
+            message,
+            *args,
+        ),
     )
     if not author_check.allowed:
         _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, author_check.message)
@@ -403,6 +295,13 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             allowed_authors=allowed,
             validation_enabled=validation_enabled,
             design_mode=design_mode,
+            log_callback=lambda level, message, *args: _design_log(
+                DESIGN_LOG_AUTHOR,
+                design_mode,
+                level,
+                message,
+                *args,
+            ),
         )
         if not result.allowed:
             flags.totals["blocked"] += 1
