@@ -688,6 +688,7 @@ def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path]
     for file in iter_template_files(base_dir):
         if file.name in BASE_TEMPLATE_NAMES:
             continue
+        extension = file.suffix.lower()
         for dest in destinations.values():
             candidate = normalize_path(dest / file.name)
             if not candidate.exists():
@@ -696,19 +697,19 @@ def determine_uninstall_open_flags(base_dir: Path, destinations: dict[str, Path]
                 flags.open_roaming_folder = True
             if dest == excel:
                 flags.open_excel_startup_folder = True
-            if dest == custom_word:
+            if dest == custom_word and extension in {".dotx", ".dotm"}:
                 flags.open_custom_word_folder = True
-            if dest == custom_ppt:
+            if dest == custom_ppt and extension in {".potx", ".potm", ".thmx"}:
                 flags.open_custom_ppt_folder = True
-            if dest in {custom_excel, custom_additional}:
+            if dest in {custom_excel, custom_additional} and extension in {".xltx", ".xltm"}:
                 flags.open_custom_excel_folder = True
-            if file.suffix.lower() in {".dotx", ".dotm"}:
+            if extension in {".dotx", ".dotm"}:
                 flags.open_word = True
-            if file.suffix.lower() in {".potx", ".potm", ".thmx"}:
+            if extension in {".potx", ".potm", ".thmx"}:
                 flags.open_ppt = True
-            if file.suffix.lower() in {".xltx", ".xltm"}:
+            if extension in {".xltx", ".xltm"}:
                 flags.open_excel = True
-        if file.suffix.lower() == ".thmx":
+        if extension == ".thmx":
             if design_mode:
                 print(f"[ANALYZE] Detectado tema en payload: {file}")
             flags.open_theme_folder = True
