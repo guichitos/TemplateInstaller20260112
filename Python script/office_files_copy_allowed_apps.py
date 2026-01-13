@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import office_files_copy_allowed
@@ -21,6 +22,25 @@ def iter_copy_allowed_apps(base_dir: Path) -> list[str]:
     return apps
 
 
+def launch_apps(apps: list[str]) -> None:
+    if os.name != "nt":
+        print("[WARN] Apertura de aplicaciones omitida: no es Windows.")
+        return
+    mapping = {
+        "WORD": "winword.exe",
+        "POWERPOINT": "powerpnt.exe",
+        "EXCEL": "excel.exe",
+    }
+    for app in apps:
+        exe = mapping.get(app)
+        if not exe:
+            continue
+        try:
+            os.startfile(exe)  # type: ignore[arg-type]
+        except OSError as exc:
+            print(f"[WARN] No se pudo iniciar {app} ({exc})")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Listado único de apps para archivos Office con permiso de copia.",
@@ -31,9 +51,16 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         help="Carpeta a escanear (por defecto, la carpeta actual).",
     )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Abrir las aplicaciones detectadas en el listado.",
+    )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     apps = iter_copy_allowed_apps(base_dir)
+    if args.open:
+        launch_apps(apps)
     print({"apps": apps})
     return 0
 
