@@ -14,15 +14,13 @@ from typing import Iterable, Iterator, List, Optional, Set
 import xml.etree.ElementTree as ET
 
 
-MANUAL_IS_DESIGN_MODE: bool | None = False
+MANUAL_IS_DESIGN_MODE: bool | None = True
 MANUAL_DESIGN_LOG_PATHS: bool | None = False
 MANUAL_DESIGN_LOG_MRU: bool | None = False
-MANUAL_DESIGN_LOG_OPENING: bool | None = False
 MANUAL_DESIGN_LOG_AUTHOR: bool | None = False
 MANUAL_DESIGN_LOG_COPY_BASE: bool | None = False
 MANUAL_DESIGN_LOG_COPY_CUSTOM: bool | None = False
 MANUAL_DESIGN_LOG_BACKUP: bool | None = False
-MANUAL_DESIGN_LOG_APP_LAUNCH: bool | None = False
 MANUAL_DESIGN_LOG_CLOSE_APPS: bool | None = False
 MANUAL_DESIGN_LOG_INSTALLER: bool | None = False
 MANUAL_DESIGN_LOG_UNINSTALLER: bool | None = False
@@ -61,14 +59,12 @@ try:
         BASE_TEMPLATE_NAMES,
         DEFAULT_ALLOWED_TEMPLATE_AUTHORS,
         DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
-        DEFAULT_DOCUMENT_THEME_DELAY_SECONDS,
         DEFAULT_EXCEL_STARTUP_FOLDER,
         DEFAULT_POWERPOINT_TEMPLATE_PATH,
         DEFAULT_ROAMING_TEMPLATE_FOLDER,
         DEFAULT_THEME_FOLDER,
         DEFAULT_DESIGN_MODE,
         DEFAULT_EXCEL_TEMPLATE_PATH,
-        DESIGN_LOG_APP_LAUNCH,
         DESIGN_LOG_AUTHOR,
         DESIGN_LOG_BACKUP,
         DESIGN_LOG_CLOSE_APPS,
@@ -76,7 +72,6 @@ try:
         DESIGN_LOG_COPY_CUSTOM,
         DESIGN_LOG_INSTALLER,
         DESIGN_LOG_MRU,
-        DESIGN_LOG_OPENING,
         DESIGN_LOG_PATHS,
         DESIGN_LOG_UNINSTALLER,
         DOCUMENTS_PATH,
@@ -91,7 +86,6 @@ try:
         _extract_author,
         _extract_mru_path,
         _find_mru_paths,
-        _mark_folder_open_flag,
         _normalize_allowed_authors,
         _read_registry_value,
         _resolve_appdata_path,
@@ -113,7 +107,6 @@ try:
         exit_with_error,
         log_registry_sources,
         log_template_paths,
-        open_template_folders,
         path_in_appdata,
         resolve_base_directory,
         resolve_template_paths,
@@ -238,9 +231,6 @@ except Exception:
         "www.gradaz.com",
     ]
 
-    DEFAULT_DOCUMENT_THEME_DELAY_SECONDS = int(
-        os.environ.get("DOCUMENT_THEME_OPEN_DELAY_SECONDS", "0") or 0
-    )
     DEFAULT_DESIGN_MODE = os.environ.get("IsDesignModeEnabled", "false").lower() == "true"
     AUTHOR_VALIDATION_ENABLED = os.environ.get("AuthorValidationEnabled", "TRUE").lower() != "false"
     MRU_VALUE_PREFIX = "[F00000000][T01ED6D7E58D00000][O00000000]*"
@@ -273,29 +263,25 @@ except Exception:
 
     DESIGN_LOG_PATHS = _design_flag("DesignLogPaths", MANUAL_DESIGN_LOG_PATHS, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_MRU = _design_flag("DesignLogMRU", MANUAL_DESIGN_LOG_MRU, DEFAULT_DESIGN_MODE)
-    DESIGN_LOG_OPENING = _design_flag("DesignLogOpening", MANUAL_DESIGN_LOG_OPENING, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_AUTHOR = _design_flag("DesignLogAuthor", MANUAL_DESIGN_LOG_AUTHOR, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_COPY_BASE = _design_flag("DesignLogCopyBase", MANUAL_DESIGN_LOG_COPY_BASE, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_COPY_CUSTOM = _design_flag("DesignLogCopyCustom", MANUAL_DESIGN_LOG_COPY_CUSTOM, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_BACKUP = _design_flag("DesignLogBackup", MANUAL_DESIGN_LOG_BACKUP, DEFAULT_DESIGN_MODE)
-    DESIGN_LOG_APP_LAUNCH = _design_flag("DesignLogAppLaunch", MANUAL_DESIGN_LOG_APP_LAUNCH, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_CLOSE_APPS = _design_flag("DesignLogCloseApps", MANUAL_DESIGN_LOG_CLOSE_APPS, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_INSTALLER = _design_flag("DesignLogInstaller", MANUAL_DESIGN_LOG_INSTALLER, DEFAULT_DESIGN_MODE)
     DESIGN_LOG_UNINSTALLER = _design_flag("DesignLogUninstaller", MANUAL_DESIGN_LOG_UNINSTALLER, DEFAULT_DESIGN_MODE)
 
     def refresh_design_log_flags(effective_design_mode: bool) -> None:
-        global DESIGN_LOG_PATHS, DESIGN_LOG_MRU, DESIGN_LOG_OPENING
+        global DESIGN_LOG_PATHS, DESIGN_LOG_MRU
         global DESIGN_LOG_AUTHOR, DESIGN_LOG_COPY_BASE, DESIGN_LOG_COPY_CUSTOM, DESIGN_LOG_BACKUP
-        global DESIGN_LOG_APP_LAUNCH, DESIGN_LOG_CLOSE_APPS, DESIGN_LOG_INSTALLER, DESIGN_LOG_UNINSTALLER
+        global DESIGN_LOG_CLOSE_APPS, DESIGN_LOG_INSTALLER, DESIGN_LOG_UNINSTALLER
 
         DESIGN_LOG_PATHS = False
         DESIGN_LOG_MRU = False
-        DESIGN_LOG_OPENING = False
         DESIGN_LOG_AUTHOR = False
         DESIGN_LOG_COPY_BASE = False
         DESIGN_LOG_COPY_CUSTOM = False
         DESIGN_LOG_BACKUP = False
-        DESIGN_LOG_APP_LAUNCH = False
         DESIGN_LOG_CLOSE_APPS = False
         DESIGN_LOG_INSTALLER = False
         DESIGN_LOG_UNINSTALLER = False
@@ -481,21 +467,7 @@ except Exception:
             return "TRUE" if self.allowed and not self.error else "FALSE"
 
     @dataclass
-    class InstallFlags:
-        open_word: bool = False
-        open_ppt: bool = False
-        open_excel: bool = False
-        open_theme_folder: bool = False
-        open_custom_word_folder: bool = False
-        open_custom_ppt_folder: bool = False
-        open_custom_excel_folder: bool = False
-        open_roaming_folder: bool = False
-        open_excel_startup_folder: bool = False
-        open_document_theme: bool = False
-        document_theme_selection: Optional[Path] = None
-        custom_selection: Optional[Path] = None
-        roaming_selection: Optional[Path] = None
-        excel_startup_selection: Optional[Path] = None
+class InstallFlags:
         totals: dict[str, int] = field(default_factory=lambda: {"files": 0, "errors": 0, "blocked": 0})
 
     def _should_update_mru(path: Path) -> bool:
@@ -506,20 +478,6 @@ except Exception:
         if ext == ".thmx":
             return False
         return True
-
-    def _mark_folder_open_flag(destination_root: Path, flags: InstallFlags, destinations: dict[str, Path]) -> None:
-        if destination_root == destinations.get("THEMES"):
-            flags.open_theme_folder = True
-        if destination_root in {destinations.get("CUSTOM"), destinations.get("WORD_CUSTOM")}:
-            flags.open_custom_word_folder = True
-        if destination_root == destinations.get("POWERPOINT_CUSTOM"):
-            flags.open_custom_ppt_folder = True
-    if destination_root == destinations.get("EXCEL_CUSTOM"):
-        flags.open_custom_excel_folder = True
-        if destination_root == destinations.get("ROAMING"):
-            flags.open_roaming_folder = True
-        if destination_root == destinations.get("EXCEL"):
-            flags.open_excel_startup_folder = True
 
     def _destination_for_extension(extension: str, destinations: dict[str, Path]) -> Optional[Path]:
         if extension in {".dotx", ".dotm"}:
@@ -777,64 +735,6 @@ except Exception:
             except OSError:
                 _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] No se pudo verificar %s", exe)
 
-    def launch_office_apps(flags: InstallFlags, design_mode: bool) -> None:
-        if not is_windows():
-            _design_log(DESIGN_LOG_APP_LAUNCH, design_mode, logging.INFO, "[WARN] Apertura de aplicaciones omitida: no es Windows.")
-            return
-        launches = []
-        if flags.open_word:
-            launches.append(("winword.exe", "Microsoft Word"))
-        if flags.open_ppt:
-            launches.append(("powerpnt.exe", "Microsoft PowerPoint"))
-        if flags.open_excel:
-            launches.append(("excel.exe", "Microsoft Excel"))
-        for exe, label in launches:
-            try:
-                _design_log(DESIGN_LOG_APP_LAUNCH, design_mode, logging.INFO, "[ACTION] Lanzando %s", label)
-                os.startfile(exe)  # type: ignore[arg-type]
-            except OSError as exc:
-                _design_log(DESIGN_LOG_APP_LAUNCH, design_mode, logging.WARNING, "[WARN] No se pudo iniciar %s (%s)", label, exc)
-
-    def open_template_folders(paths: dict[str, Path], design_mode: bool, flags: InstallFlags | None = None) -> None:
-        if not is_windows():
-            _design_log(DESIGN_LOG_OPENING, design_mode, logging.INFO, "[WARN] Apertura de carpetas omitida: no es Windows.")
-            return
-        ordered = [
-            ("THEME_PATH", "open_theme_folder", paths.get("THEME")),
-            ("CUSTOM_WORD_TEMPLATE_PATH", "open_custom_word_folder", paths.get("CUSTOM_WORD")),
-            ("CUSTOM_PPT_TEMPLATE_PATH", "open_custom_ppt_folder", paths.get("CUSTOM_PPT")),
-            ("CUSTOM_EXCEL_TEMPLATE_PATH", "open_custom_excel_folder", paths.get("CUSTOM_EXCEL")),
-            ("ROAMING_TEMPLATE_PATH", "open_roaming_folder", paths.get("ROAMING")),
-            ("EXCEL_STARTUP_PATH", "open_excel_startup_folder", paths.get("EXCEL")),
-        ]
-        for label, flag_name, target in ordered:
-            if target is None:
-                continue
-            if flags is not None and not getattr(flags, flag_name, False):
-                continue
-            try:
-                ensure_directory(target)
-                if not target.exists():
-                    _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] La carpeta %s no existe tras crearla: %s", label, target)
-                if design_mode:
-                    print(f"[OPEN] Intentando abrir carpeta {label}: {target}")
-                _design_log(DESIGN_LOG_OPENING, design_mode, logging.INFO, "[ACTION] Abriendo carpeta %s: %s", label, target)
-                try:
-                    if design_mode:
-                        print(f"[OPEN] Comando abrir (startfile): {target}")
-                    os.startfile(str(target))  # type: ignore[arg-type]
-                    _design_log(DESIGN_LOG_OPENING, design_mode, logging.INFO, "[OK] startfile lanzado para %s", label)
-                except OSError as exc:
-                    _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] startfile falló para %s (%s); usando explorer.", label, exc)
-                    try:
-                        if design_mode:
-                            print(f"[OPEN] Comando abrir (explorer): explorer {target}")
-                        subprocess.run(["explorer", str(target)], check=False)
-                    except OSError as exc2:
-                        _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] explorer también falló para %s (%s)", label, exc2)
-            except OSError as exc:
-                _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] No se pudo abrir carpeta %s (%s)", label, exc)
-
     def backup_existing(target_file: Path, design_mode: bool) -> None:
         if not target_file.exists():
             return
@@ -859,7 +759,6 @@ except Exception:
         destinations: dict[str, Path],
         design_mode: bool,
         payload_dir: Path | None = None,
-        flags: InstallFlags | None = None,
     ) -> None:
         targets = {
             destinations["WORD"]: ["Normal.dotx", "Normal.dotm", "NormalEmail.dotx", "NormalEmail.dotm"],
@@ -876,17 +775,6 @@ except Exception:
                     if not target.exists():
                         _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] No existe %s", target)
                         continue
-                    if flags is not None:
-                        suffix = target.suffix.lower()
-                        if suffix in {".dotx", ".dotm"}:
-                            flags.open_word = True
-                            flags.open_roaming_folder = True
-                        if suffix in {".potx", ".potm"}:
-                            flags.open_ppt = True
-                            flags.open_roaming_folder = True
-                        if suffix in {".xltx", ".xltm"}:
-                            flags.open_excel = True
-                            flags.open_excel_startup_folder = True
                     backup_existing(target, design_mode)
                     _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminando %s", target)
                     target.unlink()
@@ -909,7 +797,6 @@ except Exception:
 
     def remove_normal_templates(
         design_mode: bool,
-        flags: InstallFlags | None = None,
     ) -> None:
         template_dir = resolve_template_paths()["ROAMING"]
         _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, '[INFO] Ruta obtenida desde common.resolve_template_paths()["ROAMING"]')
@@ -924,9 +811,6 @@ except Exception:
                 _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[SKIP] No existe: %s", target)
                 continue
             try:
-                if flags is not None:
-                    flags.open_word = True
-                    flags.open_roaming_folder = True
                 target.unlink()
                 if target.exists():
                     _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Persistió tras borrar: %s", target)
@@ -939,7 +823,6 @@ except Exception:
         base_dir: Path,
         destinations: dict[str, Path],
         design_mode: bool,
-        flags: InstallFlags | None = None,
     ) -> None:
         for file in iter_template_files(base_dir):
             if file.name in BASE_TEMPLATE_NAMES:
@@ -949,26 +832,6 @@ except Exception:
                 candidate = normalize_path(dest / file.name)
                 try:
                     if candidate.exists():
-                        if flags is not None:
-                            if extension in {".dotx", ".dotm"}:
-                                flags.open_word = True
-                            if extension in {".potx", ".potm", ".thmx"}:
-                                flags.open_ppt = True
-                            if extension in {".xltx", ".xltm"}:
-                                flags.open_excel = True
-                            if dest == destinations.get("ROAMING"):
-                                flags.open_roaming_folder = True
-                            if dest == destinations.get("EXCEL"):
-                                flags.open_excel_startup_folder = True
-                            if dest == destinations.get("WORD_CUSTOM") and extension in {".dotx", ".dotm"}:
-                                flags.open_custom_word_folder = True
-                            if dest == destinations.get("POWERPOINT_CUSTOM") and extension in {".potx", ".potm", ".thmx"}:
-                                flags.open_custom_ppt_folder = True
-                            if dest == destinations.get("EXCEL_CUSTOM") and extension in {".xltx", ".xltm"}:
-                                flags.open_custom_excel_folder = True
-                            if dest == destinations.get("THEMES") and extension == ".thmx":
-                                flags.open_theme_folder = True
-                                flags.open_document_theme = True
                         if design_mode:
                             print(f"[DELETE] Eliminando archivo: {candidate}")
                         candidate.unlink()
@@ -1027,7 +890,6 @@ except Exception:
             try:
                 ensure_parents_and_copy(file, destination_root / filename)
                 flags.totals["files"] += 1
-                _mark_folder_open_flag(destination_root, flags, destinations)
                 _design_log(
                     DESIGN_LOG_COPY_CUSTOM,
                     design_mode,
@@ -1041,30 +903,6 @@ except Exception:
                 flags.totals["errors"] += 1
                 _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
                 continue
-
-            if extension in {".dotx", ".dotm"}:
-                flags.open_word = True
-            if extension in {".potx", ".potm"}:
-                flags.open_ppt = True
-            if extension in {".xltx", ".xltm"}:
-                flags.open_excel = True
-            if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-                flags.open_custom_word_folder = True
-            if destination_root == DEFAULT_POWERPOINT_TEMPLATE_PATH or destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-                flags.open_custom_ppt_folder = True
-            if destination_root == DEFAULT_EXCEL_TEMPLATE_PATH:
-                flags.open_custom_excel_folder = True
-            if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER:
-                flags.roaming_selection = destination_root / filename
-                flags.open_roaming_folder = True
-            if destination_root == DEFAULT_EXCEL_STARTUP_FOLDER:
-                flags.excel_startup_selection = destination_root / filename
-                flags.open_excel_startup_folder = True
-            if extension == ".thmx":
-                flags.open_document_theme = True
-                flags.document_theme_selection = destination_root / filename
-            if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-                flags.custom_selection = flags.custom_selection or destination_root / filename
 
     def _update_mru_if_applicable(app_label: str, destination: Path, design_mode: bool) -> None:
         if not _should_update_mru(destination):
@@ -1104,7 +942,7 @@ def parse_args() -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args()
-    design_mode = DEFAULT_DESIGN_MODE
+    design_mode = _resolve_design_mode()
     refresh_design_log_flags(design_mode)
     configure_logging(design_mode)
     close_office_apps(design_mode)
@@ -1119,17 +957,15 @@ def main(argv: list[str] | None = None) -> int:
     _print_intro(base_dir, design_mode)
 
     destinations = default_destinations()
-    open_flags = InstallFlags()
-    remove_normal_templates(design_mode, flags=open_flags)
-    remove_installed_templates(destinations, design_mode, base_dir, open_flags)
-    delete_custom_copies(base_dir, destinations, design_mode, open_flags)
+    remove_normal_templates(design_mode)
+    remove_installed_templates(destinations, design_mode, base_dir)
+    delete_custom_copies(base_dir, destinations, design_mode)
     clear_mru_entries_for_payload(base_dir, destinations, design_mode)
-    remove_normal_templates(design_mode, flags=open_flags)
-    open_template_folders(resolve_template_paths(), design_mode, open_flags)
-    launch_office_apps(open_flags, design_mode)
+    remove_normal_templates(design_mode)
+    _run_post_uninstall_actions(base_dir, design_mode)
     if design_mode and DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info("[FINAL] Desinstalación completada.")
-    else:
+    elif not design_mode:
         print("Ready")
     return 0
 
@@ -1143,7 +979,35 @@ def _print_intro(base_dir: Path, design_mode: bool) -> None:
 
 
 def _resolve_design_mode() -> bool:
-    return DEFAULT_DESIGN_MODE
+    if MANUAL_IS_DESIGN_MODE is not None:
+        return bool(MANUAL_IS_DESIGN_MODE)
+    return bool(DEFAULT_DESIGN_MODE)
+
+
+def _run_post_uninstall_actions(base_dir: Path, design_mode: bool) -> None:
+    scripts = [
+        "office_files_copy_allowed_destinations.py",
+        "office_files_copy_allowed_apps.py",
+    ]
+    script_dir = Path(__file__).resolve().parent
+    for script_name in scripts:
+        script_path = script_dir / script_name
+        if not script_path.exists():
+            if design_mode and DESIGN_LOG_UNINSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
+            continue
+        try:
+            subprocess.run(
+                [sys.executable, str(script_path), str(base_dir)],
+                check=False,
+                stdout=subprocess.DEVNULL if design_mode else None,
+                stderr=subprocess.DEVNULL if design_mode else None,
+            )
+        except OSError as exc:
+            if design_mode and DESIGN_LOG_UNINSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se pudo ejecutar %s (%s)", script_path, exc)
+            elif not design_mode:
+                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
 
 
 if __name__ == "__main__":
