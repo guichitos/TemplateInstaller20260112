@@ -832,8 +832,6 @@ except Exception:
                 candidate = normalize_path(dest / file.name)
                 try:
                     if candidate.exists():
-                        if design_mode:
-                            print(f"[DELETE] Eliminando archivo: {candidate}")
                         candidate.unlink()
                         _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", candidate)
                 except OSError as exc:
