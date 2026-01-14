@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
+import sys
 from pathlib import Path
 
 # Configuración manual para el modo diseño.
@@ -45,7 +47,6 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger(__name__).info("[INFO] Desinstalando desde: %s", base_dir)
 
     destinations = common.default_destinations()
-    open_flags = common.InstallFlags()
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info(
             "[INFO] Rutas default: WORD=%s PPT=%s EXCEL=%s",
@@ -54,13 +55,12 @@ def main(argv: list[str] | None = None) -> int:
             destinations.get("EXCEL"),
         )
     common.log_template_folder_contents(common.resolve_template_paths(), design_mode)
-    common.remove_normal_templates(design_mode, flags=open_flags)
-    common.remove_installed_templates(destinations, design_mode, base_dir, open_flags)
-    common.delete_custom_copies(base_dir, destinations, design_mode, open_flags)
+    common.remove_normal_templates(design_mode)
+    common.remove_installed_templates(destinations, design_mode, base_dir)
+    common.delete_custom_copies(base_dir, destinations, design_mode)
     common.clear_mru_entries_for_payload(base_dir, destinations, design_mode)
-    common.remove_normal_templates(design_mode, flags=open_flags)
-    common.open_template_folders(common.resolve_template_paths(), design_mode, open_flags)
-    common.launch_office_apps(open_flags, design_mode)
+    common.remove_normal_templates(design_mode)
+    _run_post_uninstall_actions(base_dir, design_mode)
 
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info("[FINAL] Desinstalación completada.")
@@ -81,6 +81,33 @@ def _resolve_design_mode() -> bool:
     if MANUAL_IS_DESIGN_MODE is not None:
         return bool(MANUAL_IS_DESIGN_MODE)
     return bool(common.DEFAULT_DESIGN_MODE)
+
+
+def _run_post_uninstall_actions(base_dir: Path, design_mode: bool) -> None:
+    scripts = [
+        "office_files_copy_allowed_destinations.py",
+        "office_files_copy_allowed_apps.py",
+    ]
+    script_dir = Path(__file__).resolve().parent
+    for script_name in scripts:
+        script_path = script_dir / script_name
+        if not script_path.exists():
+            if design_mode and common.DESIGN_LOG_UNINSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
+            else:
+                print(f"[WARN] No se encontró {script_path}")
+            continue
+        try:
+            subprocess.run([sys.executable, str(script_path), str(base_dir)], check=False)
+        except OSError as exc:
+            if design_mode and common.DESIGN_LOG_UNINSTALLER:
+                logging.getLogger(__name__).warning(
+                    "[WARN] No se pudo ejecutar %s (%s)",
+                    script_path,
+                    exc,
+                )
+            else:
+                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
 
 
 if __name__ == "__main__":
