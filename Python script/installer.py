@@ -13,7 +13,7 @@ from typing import Iterable
 # - Establece en True para forzar modo diseño siempre.
 # - Establece en False para desactivarlo siempre.
 # - Deja en None para usar la lógica normal basada en entorno.
-MANUAL_IS_DESIGN_MODE: bool | None = False
+MANUAL_IS_DESIGN_MODE: bool | None = True
 
 try:
     from . import common
@@ -133,7 +133,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             flags.totals["errors"],
             flags.totals["blocked"],
         )
-    else:
+    elif not design_mode:
         print("Ready")
     return 0
 
@@ -171,11 +171,14 @@ def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
         if not script_path.exists():
             if design_mode and common.DESIGN_LOG_INSTALLER:
                 logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
-            else:
-                print(f"[WARN] No se encontró {script_path}")
             continue
         try:
-            subprocess.run([sys.executable, str(script_path), str(base_dir)], check=False)
+            subprocess.run(
+                [sys.executable, str(script_path), str(base_dir)],
+                check=False,
+                stdout=subprocess.DEVNULL if design_mode else None,
+                stderr=subprocess.DEVNULL if design_mode else None,
+            )
         except OSError as exc:
             if design_mode and common.DESIGN_LOG_INSTALLER:
                 logging.getLogger(__name__).warning(
@@ -183,7 +186,7 @@ def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
                     script_path,
                     exc,
                 )
-            else:
+            elif not design_mode:
                 print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
 
 

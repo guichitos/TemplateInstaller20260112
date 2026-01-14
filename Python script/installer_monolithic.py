@@ -14,7 +14,7 @@ from typing import Iterable, Iterator, List, Optional, Set
 import xml.etree.ElementTree as ET
 
 
-MANUAL_IS_DESIGN_MODE: bool | None = False
+MANUAL_IS_DESIGN_MODE: bool | None = True
 MANUAL_DESIGN_LOG_PATHS: bool | None = False
 MANUAL_DESIGN_LOG_MRU: bool | None = False
 MANUAL_DESIGN_LOG_AUTHOR: bool | None = False
@@ -917,7 +917,7 @@ def parse_args() -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args()
-    design_mode = False
+    design_mode = _resolve_design_mode()
     refresh_design_log_flags(design_mode)
 
     resolved_paths = resolve_template_paths()
@@ -987,7 +987,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     _run_post_install_actions(base_dir, design_mode)
 
-    print("Ready")
+    if not design_mode:
+        print("Ready")
     return 0
 
 
@@ -1004,7 +1005,35 @@ def _resolve_allowed_authors(cli_value: str | None) -> list[str]:
 
 
 def _resolve_design_mode() -> bool:
-    return False
+    if MANUAL_IS_DESIGN_MODE is not None:
+        return bool(MANUAL_IS_DESIGN_MODE)
+    return bool(DEFAULT_DESIGN_MODE)
+
+
+def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
+    scripts = [
+        "office_files_copy_allowed_destinations.py",
+        "office_files_copy_allowed_apps.py",
+    ]
+    script_dir = Path(__file__).resolve().parent
+    for script_name in scripts:
+        script_path = script_dir / script_name
+        if not script_path.exists():
+            if design_mode and DESIGN_LOG_INSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
+            continue
+        try:
+            subprocess.run(
+                [sys.executable, str(script_path), str(base_dir)],
+                check=False,
+                stdout=subprocess.DEVNULL if design_mode else None,
+                stderr=subprocess.DEVNULL if design_mode else None,
+            )
+        except OSError as exc:
+            if design_mode and DESIGN_LOG_INSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se pudo ejecutar %s (%s)", script_path, exc)
+            elif not design_mode:
+                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
 
 
 def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
