@@ -1036,5 +1036,28 @@ def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
                 print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
 
 
+def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
+    scripts = [
+        "office_files_copy_allowed_destinations.py",
+        "office_files_copy_allowed_apps.py",
+    ]
+    script_dir = Path(__file__).resolve().parent
+    for script_name in scripts:
+        script_path = script_dir / script_name
+        if not script_path.exists():
+            if design_mode and DESIGN_LOG_INSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
+            else:
+                print(f"[WARN] No se encontró {script_path}")
+            continue
+        try:
+            subprocess.run([sys.executable, str(script_path), str(base_dir)], check=False)
+        except OSError as exc:
+            if design_mode and DESIGN_LOG_INSTALLER:
+                logging.getLogger(__name__).warning("[WARN] No se pudo ejecutar %s (%s)", script_path, exc)
+            else:
+                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
