@@ -467,7 +467,7 @@ except Exception:
             return "TRUE" if self.allowed and not self.error else "FALSE"
 
     @dataclass
-class InstallFlags:
+    class InstallFlags:
         totals: dict[str, int] = field(default_factory=lambda: {"files": 0, "errors": 0, "blocked": 0})
 
     def _should_update_mru(path: Path) -> bool:
