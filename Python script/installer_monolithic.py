@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,15 +14,13 @@ from typing import Iterable, Iterator, List, Optional, Set
 import xml.etree.ElementTree as ET
 
 
-MANUAL_IS_DESIGN_MODE: bool | None = False
+MANUAL_IS_DESIGN_MODE: bool | None = True
 MANUAL_DESIGN_LOG_PATHS: bool | None = False
 MANUAL_DESIGN_LOG_MRU: bool | None = False
-MANUAL_DESIGN_LOG_OPENING: bool | None = False
 MANUAL_DESIGN_LOG_AUTHOR: bool | None = False
 MANUAL_DESIGN_LOG_COPY_BASE: bool | None = False
 MANUAL_DESIGN_LOG_COPY_CUSTOM: bool | None = False
 MANUAL_DESIGN_LOG_BACKUP: bool | None = False
-MANUAL_DESIGN_LOG_APP_LAUNCH: bool | None = False
 MANUAL_DESIGN_LOG_CLOSE_APPS: bool | None = False
 MANUAL_DESIGN_LOG_INSTALLER: bool | None = False
 MANUAL_DESIGN_LOG_UNINSTALLER: bool | None = False
@@ -154,7 +151,6 @@ DEFAULT_ALLOWED_TEMPLATE_AUTHORS = [
     "www.gradaz.com",
 ]
 
-DEFAULT_DOCUMENT_THEME_DELAY_SECONDS = 0
 DEFAULT_DESIGN_MODE = False
 AUTHOR_VALIDATION_ENABLED = True
 MRU_VALUE_PREFIX = "[F00000000][T01ED6D7E58D00000][O00000000]*"
@@ -166,29 +162,25 @@ def _design_flag(env_var: str, manual_override: bool | None, fallback: bool) -> 
 
 DESIGN_LOG_PATHS = _design_flag("DesignLogPaths", MANUAL_DESIGN_LOG_PATHS, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_MRU = _design_flag("DesignLogMRU", MANUAL_DESIGN_LOG_MRU, DEFAULT_DESIGN_MODE)
-DESIGN_LOG_OPENING = _design_flag("DesignLogOpening", MANUAL_DESIGN_LOG_OPENING, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_AUTHOR = _design_flag("DesignLogAuthor", MANUAL_DESIGN_LOG_AUTHOR, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_COPY_BASE = _design_flag("DesignLogCopyBase", MANUAL_DESIGN_LOG_COPY_BASE, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_COPY_CUSTOM = _design_flag("DesignLogCopyCustom", MANUAL_DESIGN_LOG_COPY_CUSTOM, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_BACKUP = _design_flag("DesignLogBackup", MANUAL_DESIGN_LOG_BACKUP, DEFAULT_DESIGN_MODE)
-DESIGN_LOG_APP_LAUNCH = _design_flag("DesignLogAppLaunch", MANUAL_DESIGN_LOG_APP_LAUNCH, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_CLOSE_APPS = _design_flag("DesignLogCloseApps", MANUAL_DESIGN_LOG_CLOSE_APPS, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_INSTALLER = _design_flag("DesignLogInstaller", MANUAL_DESIGN_LOG_INSTALLER, DEFAULT_DESIGN_MODE)
 DESIGN_LOG_UNINSTALLER = _design_flag("DesignLogUninstaller", MANUAL_DESIGN_LOG_UNINSTALLER, DEFAULT_DESIGN_MODE)
 
 
 def refresh_design_log_flags(effective_design_mode: bool) -> None:
-    global DESIGN_LOG_PATHS, DESIGN_LOG_MRU, DESIGN_LOG_OPENING
+    global DESIGN_LOG_PATHS, DESIGN_LOG_MRU
     global DESIGN_LOG_AUTHOR, DESIGN_LOG_COPY_BASE, DESIGN_LOG_COPY_CUSTOM, DESIGN_LOG_BACKUP
-    global DESIGN_LOG_APP_LAUNCH, DESIGN_LOG_CLOSE_APPS, DESIGN_LOG_INSTALLER, DESIGN_LOG_UNINSTALLER
+    global DESIGN_LOG_CLOSE_APPS, DESIGN_LOG_INSTALLER, DESIGN_LOG_UNINSTALLER
     DESIGN_LOG_PATHS = False
     DESIGN_LOG_MRU = False
-    DESIGN_LOG_OPENING = False
     DESIGN_LOG_AUTHOR = False
     DESIGN_LOG_COPY_BASE = False
     DESIGN_LOG_COPY_CUSTOM = False
     DESIGN_LOG_BACKUP = False
-    DESIGN_LOG_APP_LAUNCH = False
     DESIGN_LOG_CLOSE_APPS = False
     DESIGN_LOG_INSTALLER = False
     DESIGN_LOG_UNINSTALLER = False
@@ -382,20 +374,6 @@ def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
 
 @dataclass
 class InstallFlags:
-    open_word: bool = False
-    open_ppt: bool = False
-    open_excel: bool = False
-    open_theme_folder: bool = False
-    open_custom_word_folder: bool = False
-    open_custom_ppt_folder: bool = False
-    open_custom_excel_folder: bool = False
-    open_roaming_folder: bool = False
-    open_excel_startup_folder: bool = False
-    open_document_theme: bool = False
-    document_theme_selection: Optional[Path] = None
-    custom_selection: Optional[Path] = None
-    roaming_selection: Optional[Path] = None
-    excel_startup_selection: Optional[Path] = None
     totals: dict[str, int] = field(default_factory=lambda: {"files": 0, "errors": 0, "blocked": 0})
 
 
@@ -435,33 +413,11 @@ def install_template(
         ensure_parents_and_copy(source, destination)
         flags.totals["files"] += 1
         _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.INFO, "[OK] Copiado %s a %s", filename, destination)
-        _mark_folder_open_flag(destination_root, flags, destinations_map)
         _update_mru_if_applicable(app_label, destination, design_mode)
     except OSError as exc:
         flags.totals["errors"] += 1
         _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
         return
-
-    if app_label == "WORD":
-        flags.open_word = True
-        if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER:
-            flags.roaming_selection = destination
-    elif app_label == "POWERPOINT":
-        flags.open_ppt = True
-        if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER:
-            flags.roaming_selection = destination
-    elif app_label == "EXCEL":
-        flags.open_excel = True
-        if destination_root == DEFAULT_EXCEL_STARTUP_FOLDER:
-            flags.excel_startup_selection = destination
-
-    if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-        flags.custom_selection = destination
-        flags.open_custom_word_folder = True
-    if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER and filename.lower().endswith(".thmx"):
-        flags.open_document_theme = True
-        flags.document_theme_selection = destination
-        flags.open_ppt = True
 
 
 def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: InstallFlags, allowed: Iterable[str], validation_enabled: bool, design_mode: bool) -> None:
@@ -498,7 +454,6 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
         try:
             ensure_parents_and_copy(file, target_path)
             flags.totals["files"] += 1
-            _mark_folder_open_flag(destination_root, flags, destinations)
             _design_log(
                 DESIGN_LOG_COPY_CUSTOM,
                 design_mode,
@@ -512,31 +467,6 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             flags.totals["errors"] += 1
             _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
             continue
-
-        if extension in {".dotx", ".dotm"}:
-            flags.open_word = True
-        if extension in {".potx", ".potm"}:
-            flags.open_ppt = True
-        if extension in {".xltx", ".xltm"}:
-            flags.open_excel = True
-        if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-            flags.open_custom_word_folder = True
-        if destination_root == DEFAULT_POWERPOINT_TEMPLATE_PATH or destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-            flags.open_custom_ppt_folder = True
-        if destination_root == DEFAULT_EXCEL_TEMPLATE_PATH:
-            flags.open_custom_excel_folder = True
-        if destination_root == DEFAULT_ROAMING_TEMPLATE_FOLDER:
-            flags.roaming_selection = destination_root / filename
-            flags.open_roaming_folder = True
-        if destination_root == DEFAULT_EXCEL_STARTUP_FOLDER:
-            flags.excel_startup_selection = destination_root / filename
-            flags.open_excel_startup_folder = True
-        if extension == ".thmx":
-            flags.open_document_theme = True
-            flags.document_theme_selection = destination_root / filename
-            flags.open_ppt = True
-        if destination_root == DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH:
-            flags.custom_selection = flags.custom_selection or destination_root / filename
 
 
 def remove_installed_templates(destinations: dict[str, Path], design_mode: bool) -> None:
@@ -625,54 +555,6 @@ def backup_existing(target_file: Path, design_mode: bool) -> None:
         )
 
 
-def open_template_folders(paths: dict[str, Path], design_mode: bool, flags: InstallFlags | None = None) -> None:
-    if not is_windows():
-        _design_log(DESIGN_LOG_OPENING, design_mode, logging.INFO, "[WARN] Apertura de carpetas omitida: no es Windows.")
-        return
-    ordered = [
-        ("THEME_PATH", "open_theme_folder", paths.get("THEME")),
-        ("CUSTOM_WORD_TEMPLATE_PATH", "open_custom_word_folder", paths.get("CUSTOM_WORD")),
-        ("CUSTOM_PPT_TEMPLATE_PATH", "open_custom_ppt_folder", paths.get("CUSTOM_PPT")),
-        ("CUSTOM_EXCEL_TEMPLATE_PATH", "open_custom_excel_folder", paths.get("CUSTOM_EXCEL")),
-        ("ROAMING_TEMPLATE_PATH", "open_roaming_folder", paths.get("ROAMING")),
-        ("EXCEL_STARTUP_PATH", "open_excel_startup_folder", paths.get("EXCEL")),
-    ]
-    for label, flag_name, target in ordered:
-        if target is None:
-            continue
-        if flags is not None and not getattr(flags, flag_name, False):
-            continue
-        try:
-            ensure_directory(target)
-            if not target.exists():
-                _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] La carpeta %s no existe tras crearla: %s", label, target)
-            _design_log(DESIGN_LOG_OPENING, design_mode, logging.INFO, "[ACTION] Abriendo carpeta %s: %s", label, target)
-            try:
-                os.startfile(str(target))  # type: ignore[arg-type]
-                _design_log(DESIGN_LOG_OPENING, design_mode, logging.INFO, "[OK] startfile lanzado para %s", label)
-            except OSError as exc:
-                _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] startfile falló para %s (%s); usando explorer.", label, exc)
-                try:
-                    subprocess.run(["explorer", str(target)], check=False)
-                except OSError as exc2:
-                    _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] explorer también falló para %s (%s)", label, exc2)
-        except OSError as exc:
-            _design_log(DESIGN_LOG_OPENING, design_mode, logging.WARNING, "[WARN] No se pudo abrir carpeta %s (%s)", label, exc)
-
-
-def _mark_folder_open_flag(destination_root: Path, flags: InstallFlags, destinations: dict[str, Path]) -> None:
-    if destination_root == destinations.get("THEMES"):
-        flags.open_theme_folder = True
-    if destination_root in {destinations.get("CUSTOM"), destinations.get("WORD_CUSTOM")}:
-        flags.open_custom_word_folder = True
-    if destination_root == destinations.get("POWERPOINT_CUSTOM"):
-        flags.open_custom_ppt_folder = True
-    if destination_root == destinations.get("EXCEL_CUSTOM"):
-        flags.open_custom_excel_folder = True
-    if destination_root == destinations.get("ROAMING"):
-        flags.open_roaming_folder = True
-    if destination_root == destinations.get("EXCEL"):
-        flags.open_excel_startup_folder = True
 
 
 def _update_mru_if_applicable(app_label: str, destination: Path, design_mode: bool) -> None:
@@ -779,23 +661,6 @@ def close_office_apps(design_mode: bool) -> None:
             _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] No se pudo verificar %s", exe)
 
 
-def launch_office_apps(flags: InstallFlags, design_mode: bool) -> None:
-    if not is_windows():
-        _design_log(DESIGN_LOG_APP_LAUNCH, design_mode, logging.INFO, "[WARN] Apertura de aplicaciones omitida: no es Windows.")
-        return
-    launches = []
-    if flags.open_word:
-        launches.append(("winword.exe", "Microsoft Word"))
-    if flags.open_ppt:
-        launches.append(("powerpnt.exe", "Microsoft PowerPoint"))
-    if flags.open_excel:
-        launches.append(("excel.exe", "Microsoft Excel"))
-    for exe, label in launches:
-        try:
-            _design_log(DESIGN_LOG_APP_LAUNCH, design_mode, logging.INFO, "[ACTION] Lanzando %s", label)
-            os.startfile(exe)  # type: ignore[arg-type]
-        except OSError as exc:
-            _design_log(DESIGN_LOG_APP_LAUNCH, design_mode, logging.WARNING, "[WARN] No se pudo iniciar %s (%s)", label, exc)
 
 
 # --------------------------------------------------------------------------- #
@@ -1022,6 +887,113 @@ def _destination_for_extension(extension: str, destinations: dict[str, Path]) ->
     return None
 
 
+def _resolve_destination_for_name(
+    name: str,
+    paths: dict[str, Path],
+    base_names: Iterable[str] = BASE_TEMPLATE_NAMES,
+) -> Optional[Path]:
+    extension = Path(name).suffix.lower()
+    if name in base_names:
+        if name.startswith(("Normal.", "NormalEmail.", "Blank.")):
+            return paths["ROAMING"]
+        if name.startswith(("Book.", "Sheet.")):
+            return paths["EXCEL"]
+    if extension in {".dotx", ".dotm"}:
+        return paths["CUSTOM_WORD"]
+    if extension in {".potx", ".potm"}:
+        return paths["CUSTOM_PPT"]
+    if extension in {".xltx", ".xltm"}:
+        return paths["CUSTOM_EXCEL"]
+    if extension == ".thmx":
+        return paths["THEME"]
+    return None
+
+
+def _resolve_app_label(extension: str) -> str:
+    if extension in {".dotx", ".dotm"}:
+        return "WORD"
+    if extension in {".potx", ".potm", ".thmx"}:
+        return "POWERPOINT"
+    if extension in {".xltx", ".xltm"}:
+        return "EXCEL"
+    return ""
+
+
+def _iter_copy_allowed_items(
+    base_dir: Path,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+) -> list[dict[str, str]]:
+    paths = resolve_template_paths()
+    items: list[dict[str, str]] = []
+    for ext in SUPPORTED_TEMPLATE_EXTENSIONS:
+        for path in base_dir.glob(f"*{ext}"):
+            if not path.is_file():
+                continue
+            result = check_template_author(
+                path,
+                allowed_authors=allowed_authors,
+                validation_enabled=validation_enabled,
+            )
+            if not result.allowed:
+                continue
+            destination_root = _resolve_destination_for_name(path.name, paths)
+            app_label = _resolve_app_label(path.suffix.lower())
+            items.append(
+                {
+                    "destination": str(destination_root.resolve()) if destination_root else "",
+                    "app": app_label,
+                }
+            )
+    return items
+
+
+def _collect_unique_values(items: list[dict[str, str]], key: str) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+    for item in items:
+        value = item.get(key, "")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
+def _open_destinations(destinations: list[str]) -> None:
+    if os.name != "nt":
+        return
+    for destination in destinations:
+        try:
+            os.startfile(destination)  # type: ignore[arg-type]
+        except OSError:
+            try:
+                subprocess.run(["cmd", "/c", "start", "", destination], check=False)
+            except OSError:
+                continue
+
+
+def _launch_apps(apps: list[str]) -> None:
+    if os.name != "nt":
+        return
+    mapping = {
+        "WORD": "winword.exe",
+        "POWERPOINT": "powerpnt.exe",
+        "EXCEL": "excel.exe",
+    }
+    for app in apps:
+        exe = mapping.get(app)
+        if not exe:
+            continue
+        try:
+            os.startfile(exe)  # type: ignore[arg-type]
+        except OSError:
+            try:
+                subprocess.run(["cmd", "/c", "start", "", exe], check=False)
+            except OSError:
+                continue
+
+
 def configure_logging(design_mode: bool) -> None:
     return
 
@@ -1052,7 +1024,7 @@ def parse_args() -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args()
-    design_mode = False
+    design_mode = _resolve_design_mode()
     refresh_design_log_flags(design_mode)
 
     resolved_paths = resolve_template_paths()
@@ -1120,14 +1092,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         validation_enabled=validation_enabled,
         design_mode=design_mode,
     )
-    open_template_folders(resolved_paths, design_mode, flags)
+    _run_post_install_actions(base_dir, design_mode, allowed_authors, validation_enabled)
 
-    if flags.open_document_theme and DEFAULT_DOCUMENT_THEME_DELAY_SECONDS > 0:
-        time.sleep(DEFAULT_DOCUMENT_THEME_DELAY_SECONDS)
-
-    launch_office_apps(flags, design_mode)
-
-    print("Ready")
+    if not design_mode:
+        print("Ready")
     return 0
 
 
@@ -1144,7 +1112,26 @@ def _resolve_allowed_authors(cli_value: str | None) -> list[str]:
 
 
 def _resolve_design_mode() -> bool:
-    return False
+    if MANUAL_IS_DESIGN_MODE is not None:
+        return bool(MANUAL_IS_DESIGN_MODE)
+    return bool(DEFAULT_DESIGN_MODE)
+
+
+def _run_post_install_actions(
+    base_dir: Path,
+    design_mode: bool,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+) -> None:
+    items = _iter_copy_allowed_items(
+        base_dir,
+        allowed_authors=allowed_authors,
+        validation_enabled=validation_enabled,
+    )
+    destinations = _collect_unique_values(items, "destination")
+    apps = _collect_unique_values(items, "app")
+    _open_destinations(destinations)
+    _launch_apps(apps)
 
 
 if __name__ == "__main__":
