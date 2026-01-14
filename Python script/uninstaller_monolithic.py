@@ -207,9 +207,9 @@ except Exception:
     def _resolve_base_paths() -> dict[str, Path]:
         documents_path = _resolve_documents_path()
         default_custom_dir = documents_path / "Custom Office Templates"
-    custom_word = _resolve_custom_template_path(default_custom_dir)
-    custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_dir)
-    custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_dir)
+        custom_word = _resolve_custom_template_path(default_custom_dir)
+        custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_dir)
+        custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_dir)
         appdata_path = _resolve_appdata_path()
         return {
             "APPDATA": appdata_path,
