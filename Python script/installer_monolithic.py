@@ -887,6 +887,113 @@ def _destination_for_extension(extension: str, destinations: dict[str, Path]) ->
     return None
 
 
+def _resolve_destination_for_name(
+    name: str,
+    paths: dict[str, Path],
+    base_names: Iterable[str] = BASE_TEMPLATE_NAMES,
+) -> Optional[Path]:
+    extension = Path(name).suffix.lower()
+    if name in base_names:
+        if name.startswith(("Normal.", "NormalEmail.", "Blank.")):
+            return paths["ROAMING"]
+        if name.startswith(("Book.", "Sheet.")):
+            return paths["EXCEL"]
+    if extension in {".dotx", ".dotm"}:
+        return paths["CUSTOM_WORD"]
+    if extension in {".potx", ".potm"}:
+        return paths["CUSTOM_PPT"]
+    if extension in {".xltx", ".xltm"}:
+        return paths["CUSTOM_EXCEL"]
+    if extension == ".thmx":
+        return paths["THEME"]
+    return None
+
+
+def _resolve_app_label(extension: str) -> str:
+    if extension in {".dotx", ".dotm"}:
+        return "WORD"
+    if extension in {".potx", ".potm", ".thmx"}:
+        return "POWERPOINT"
+    if extension in {".xltx", ".xltm"}:
+        return "EXCEL"
+    return ""
+
+
+def _iter_copy_allowed_items(
+    base_dir: Path,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+) -> list[dict[str, str]]:
+    paths = resolve_template_paths()
+    items: list[dict[str, str]] = []
+    for ext in SUPPORTED_TEMPLATE_EXTENSIONS:
+        for path in base_dir.glob(f"*{ext}"):
+            if not path.is_file():
+                continue
+            result = check_template_author(
+                path,
+                allowed_authors=allowed_authors,
+                validation_enabled=validation_enabled,
+            )
+            if not result.allowed:
+                continue
+            destination_root = _resolve_destination_for_name(path.name, paths)
+            app_label = _resolve_app_label(path.suffix.lower())
+            items.append(
+                {
+                    "destination": str(destination_root.resolve()) if destination_root else "",
+                    "app": app_label,
+                }
+            )
+    return items
+
+
+def _collect_unique_values(items: list[dict[str, str]], key: str) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+    for item in items:
+        value = item.get(key, "")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
+def _open_destinations(destinations: list[str]) -> None:
+    if os.name != "nt":
+        return
+    for destination in destinations:
+        try:
+            os.startfile(destination)  # type: ignore[arg-type]
+        except OSError:
+            try:
+                subprocess.run(["cmd", "/c", "start", "", destination], check=False)
+            except OSError:
+                continue
+
+
+def _launch_apps(apps: list[str]) -> None:
+    if os.name != "nt":
+        return
+    mapping = {
+        "WORD": "winword.exe",
+        "POWERPOINT": "powerpnt.exe",
+        "EXCEL": "excel.exe",
+    }
+    for app in apps:
+        exe = mapping.get(app)
+        if not exe:
+            continue
+        try:
+            os.startfile(exe)  # type: ignore[arg-type]
+        except OSError:
+            try:
+                subprocess.run(["cmd", "/c", "start", "", exe], check=False)
+            except OSError:
+                continue
+
+
 def configure_logging(design_mode: bool) -> None:
     return
 
@@ -985,7 +1092,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         validation_enabled=validation_enabled,
         design_mode=design_mode,
     )
-    _run_post_install_actions(base_dir, design_mode)
+    _run_post_install_actions(base_dir, design_mode, allowed_authors, validation_enabled)
 
     if not design_mode:
         print("Ready")
@@ -1010,53 +1117,21 @@ def _resolve_design_mode() -> bool:
     return bool(DEFAULT_DESIGN_MODE)
 
 
-def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
-    scripts = [
-        "office_files_copy_allowed_destinations.py",
-        "office_files_copy_allowed_apps.py",
-    ]
-    script_dir = Path(__file__).resolve().parent
-    for script_name in scripts:
-        script_path = script_dir / script_name
-        if not script_path.exists():
-            if design_mode and DESIGN_LOG_INSTALLER:
-                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
-            continue
-        try:
-            subprocess.run(
-                [sys.executable, str(script_path), str(base_dir)],
-                check=False,
-                stdout=subprocess.DEVNULL if design_mode else None,
-                stderr=subprocess.DEVNULL if design_mode else None,
-            )
-        except OSError as exc:
-            if design_mode and DESIGN_LOG_INSTALLER:
-                logging.getLogger(__name__).warning("[WARN] No se pudo ejecutar %s (%s)", script_path, exc)
-            elif not design_mode:
-                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
-
-
-def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
-    scripts = [
-        "office_files_copy_allowed_destinations.py",
-        "office_files_copy_allowed_apps.py",
-    ]
-    script_dir = Path(__file__).resolve().parent
-    for script_name in scripts:
-        script_path = script_dir / script_name
-        if not script_path.exists():
-            if design_mode and DESIGN_LOG_INSTALLER:
-                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
-            else:
-                print(f"[WARN] No se encontró {script_path}")
-            continue
-        try:
-            subprocess.run([sys.executable, str(script_path), str(base_dir)], check=False)
-        except OSError as exc:
-            if design_mode and DESIGN_LOG_INSTALLER:
-                logging.getLogger(__name__).warning("[WARN] No se pudo ejecutar %s (%s)", script_path, exc)
-            else:
-                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
+def _run_post_install_actions(
+    base_dir: Path,
+    design_mode: bool,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+) -> None:
+    items = _iter_copy_allowed_items(
+        base_dir,
+        allowed_authors=allowed_authors,
+        validation_enabled=validation_enabled,
+    )
+    destinations = _collect_unique_values(items, "destination")
+    apps = _collect_unique_values(items, "app")
+    _open_destinations(destinations)
+    _launch_apps(apps)
 
 
 if __name__ == "__main__":
