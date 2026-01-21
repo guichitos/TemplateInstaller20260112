@@ -23,7 +23,9 @@ def iter_copy_allowed_destinations(base_dir: Path) -> list[str]:
     return destinations
 
 
-def open_destinations(destinations: list[str]) -> None:
+def open_destinations(destinations: list[str], design_mode: bool) -> None:
+    if not design_mode:
+        return
     if os.name != "nt":
         print("[WARN] Apertura de carpetas omitida: no es Windows.")
         return
@@ -52,11 +54,18 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         help="Carpeta a escanear (por defecto, la carpeta actual).",
     )
+    parser.add_argument(
+        "--design-mode",
+        action="store_true",
+        help="Muestra información de depuración y abre destinos.",
+    )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
+    design_mode = args.design_mode
     destinations = iter_copy_allowed_destinations(base_dir)
-    open_destinations(destinations)
-    print({"destinations": destinations})
+    open_destinations(destinations, design_mode)
+    if design_mode:
+        print({"destinations": destinations})
     return 0
 
 
