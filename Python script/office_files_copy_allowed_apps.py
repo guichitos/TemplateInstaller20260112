@@ -24,10 +24,9 @@ def iter_copy_allowed_apps(base_dir: Path) -> list[str]:
 
 
 def launch_apps(apps: list[str], design_mode: bool) -> None:
-    if not design_mode:
-        return
     if os.name != "nt":
-        print("[WARN] Apertura de aplicaciones omitida: no es Windows.")
+        if design_mode:
+            print("[WARN] Apertura de aplicaciones omitida: no es Windows.")
         return
     mapping = {
         "WORD": "winword.exe",
@@ -39,15 +38,27 @@ def launch_apps(apps: list[str], design_mode: bool) -> None:
         if not exe:
             continue
         try:
-            print(f"[OPEN] Intentando abrir {app} ({exe}) con startfile.")
+            if design_mode:
+                print(f"[OPEN] Intentando abrir {app} ({exe}) con startfile.")
             os.startfile(exe)  # type: ignore[arg-type]
         except OSError as exc:
-            print(f"[WARN] No se pudo iniciar {app} con startfile ({exc}); reintentando con cmd.")
+            if design_mode:
+                print(f"[WARN] No se pudo iniciar {app} con startfile ({exc}); reintentando con cmd.")
             try:
-                print(f"[OPEN] Intentando abrir {app} ({exe}) con cmd start.")
+                if design_mode:
+                    print(f"[OPEN] Intentando abrir {app} ({exe}) con cmd start.")
                 subprocess.run(["cmd", "/c", "start", "", exe], check=False)
             except OSError as retry_exc:
-                print(f"[WARN] No se pudo iniciar {app} con cmd ({retry_exc})")
+                if design_mode:
+                    print(f"[WARN] No se pudo iniciar {app} con cmd ({retry_exc})")
+
+
+def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
+    apps = iter_copy_allowed_apps(base_dir)
+    launch_apps(apps, design_mode)
+    if design_mode:
+        print({"apps": apps})
+    return apps
 
 
 def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
