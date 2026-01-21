@@ -1,0 +1,5 @@
+pip install pyinstaller
+py -m PyInstaller --clean --onefile --console --name "1. Pin templates to Office apps home screen" installer_monolithic.py
+py -m PyInstaller --clean --onefile --console --name "2. Unpin templates from Office apps home screen" uninstaller_monolithic.py
+
+py -m PyInstaller --clean --onefile --console --name "1. Pin templates to Office apps home screen" 01_installer.py
