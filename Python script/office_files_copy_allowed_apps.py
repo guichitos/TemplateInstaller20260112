@@ -23,7 +23,9 @@ def iter_copy_allowed_apps(base_dir: Path) -> list[str]:
     return apps
 
 
-def launch_apps(apps: list[str]) -> None:
+def launch_apps(apps: list[str], design_mode: bool) -> None:
+    if not design_mode:
+        return
     if os.name != "nt":
         print("[WARN] Apertura de aplicaciones omitida: no es Windows.")
         return
@@ -58,11 +60,18 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         help="Carpeta a escanear (por defecto, la carpeta actual).",
     )
+    parser.add_argument(
+        "--design-mode",
+        action="store_true",
+        help="Muestra información de depuración y abre aplicaciones.",
+    )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
+    design_mode = args.design_mode
     apps = iter_copy_allowed_apps(base_dir)
-    launch_apps(apps)
-    print({"apps": apps})
+    launch_apps(apps, design_mode)
+    if design_mode:
+        print({"apps": apps})
     return 0
 
 

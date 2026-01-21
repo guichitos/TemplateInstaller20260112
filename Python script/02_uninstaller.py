@@ -96,11 +96,14 @@ def _run_post_uninstall_actions(base_dir: Path, design_mode: bool) -> None:
                 logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
             continue
         try:
+            command = [sys.executable, str(script_path), str(base_dir)]
+            if design_mode:
+                command.append("--design-mode")
             subprocess.run(
-                [sys.executable, str(script_path), str(base_dir)],
+                command,
                 check=False,
-                stdout=subprocess.DEVNULL if design_mode else None,
-                stderr=subprocess.DEVNULL if design_mode else None,
+                stdout=None if design_mode else subprocess.DEVNULL,
+                stderr=None if design_mode else subprocess.DEVNULL,
             )
         except OSError as exc:
             if design_mode and common.DESIGN_LOG_UNINSTALLER:
