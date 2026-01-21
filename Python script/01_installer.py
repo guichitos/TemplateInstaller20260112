@@ -4,8 +4,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import subprocess
-import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -161,33 +159,20 @@ def _resolve_design_mode() -> bool:
 
 
 def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
-    scripts = [
-        "office_files_copy_allowed_destinations.py",
-        "office_files_copy_allowed_apps.py",
-    ]
-    script_dir = Path(__file__).resolve().parent
-    for script_name in scripts:
-        script_path = script_dir / script_name
-        if not script_path.exists():
-            if design_mode and common.DESIGN_LOG_INSTALLER:
-                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
-            continue
-        try:
-            subprocess.run(
-                [sys.executable, str(script_path), str(base_dir)],
-                check=False,
-                stdout=subprocess.DEVNULL if design_mode else None,
-                stderr=subprocess.DEVNULL if design_mode else None,
+    import office_files_copy_allowed_apps
+    import office_files_copy_allowed_destinations
+
+    try:
+        office_files_copy_allowed_destinations.run_actions(base_dir, design_mode)
+        office_files_copy_allowed_apps.run_actions(base_dir, design_mode)
+    except OSError as exc:
+        if design_mode and common.DESIGN_LOG_INSTALLER:
+            logging.getLogger(__name__).warning(
+                "[WARN] No se pudieron ejecutar acciones post-instalación (%s)",
+                exc,
             )
-        except OSError as exc:
-            if design_mode and common.DESIGN_LOG_INSTALLER:
-                logging.getLogger(__name__).warning(
-                    "[WARN] No se pudo ejecutar %s (%s)",
-                    script_path,
-                    exc,
-                )
-            elif not design_mode:
-                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
+        elif not design_mode:
+            print(f"[WARN] No se pudieron ejecutar acciones post-instalación ({exc})")
 
 
 if __name__ == "__main__":

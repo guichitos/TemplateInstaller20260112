@@ -44,6 +44,14 @@ def open_destinations(destinations: list[str], design_mode: bool) -> None:
                 print(f"[WARN] No se pudo abrir carpeta con cmd ({retry_exc})")
 
 
+def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
+    destinations = iter_copy_allowed_destinations(base_dir)
+    open_destinations(destinations, design_mode)
+    if design_mode:
+        print({"destinations": destinations})
+    return destinations
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Listado único de destinos para archivos Office con permiso de copia.",
@@ -62,10 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     design_mode = args.design_mode
-    destinations = iter_copy_allowed_destinations(base_dir)
-    open_destinations(destinations, design_mode)
-    if design_mode:
-        print({"destinations": destinations})
+    run_actions(base_dir, design_mode)
     return 0
 
 

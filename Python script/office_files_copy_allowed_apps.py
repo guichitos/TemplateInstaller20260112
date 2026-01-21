@@ -50,6 +50,14 @@ def launch_apps(apps: list[str], design_mode: bool) -> None:
                 print(f"[WARN] No se pudo iniciar {app} con cmd ({retry_exc})")
 
 
+def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
+    apps = iter_copy_allowed_apps(base_dir)
+    launch_apps(apps, design_mode)
+    if design_mode:
+        print({"apps": apps})
+    return apps
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Listado único de apps para archivos Office con permiso de copia.",
@@ -68,10 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
     design_mode = args.design_mode
-    apps = iter_copy_allowed_apps(base_dir)
-    launch_apps(apps, design_mode)
-    if design_mode:
-        print({"apps": apps})
+    run_actions(base_dir, design_mode)
     return 0
 
 

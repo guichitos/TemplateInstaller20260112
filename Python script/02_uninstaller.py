@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import subprocess
-import sys
 from pathlib import Path
 
 # Configuración manual para el modo diseño.
@@ -84,36 +82,20 @@ def _resolve_design_mode() -> bool:
 
 
 def _run_post_uninstall_actions(base_dir: Path, design_mode: bool) -> None:
-    scripts = [
-        "office_files_copy_allowed_destinations.py",
-        "office_files_copy_allowed_apps.py",
-    ]
-    script_dir = Path(__file__).resolve().parent
-    for script_name in scripts:
-        script_path = script_dir / script_name
-        if not script_path.exists():
-            if design_mode and common.DESIGN_LOG_UNINSTALLER:
-                logging.getLogger(__name__).warning("[WARN] No se encontró %s", script_path)
-            continue
-        try:
-            command = [sys.executable, str(script_path), str(base_dir)]
-            if design_mode:
-                command.append("--design-mode")
-            subprocess.run(
-                command,
-                check=False,
-                stdout=None if design_mode else subprocess.DEVNULL,
-                stderr=None if design_mode else subprocess.DEVNULL,
+    import office_files_copy_allowed_apps
+    import office_files_copy_allowed_destinations
+
+    try:
+        office_files_copy_allowed_destinations.run_actions(base_dir, design_mode)
+        office_files_copy_allowed_apps.run_actions(base_dir, design_mode)
+    except OSError as exc:
+        if design_mode and common.DESIGN_LOG_UNINSTALLER:
+            logging.getLogger(__name__).warning(
+                "[WARN] No se pudieron ejecutar acciones post-desinstalación (%s)",
+                exc,
             )
-        except OSError as exc:
-            if design_mode and common.DESIGN_LOG_UNINSTALLER:
-                logging.getLogger(__name__).warning(
-                    "[WARN] No se pudo ejecutar %s (%s)",
-                    script_path,
-                    exc,
-                )
-            elif not design_mode:
-                print(f"[WARN] No se pudo ejecutar {script_path} ({exc})")
+        elif not design_mode:
+            print(f"[WARN] No se pudieron ejecutar acciones post-desinstalación ({exc})")
 
 
 if __name__ == "__main__":
