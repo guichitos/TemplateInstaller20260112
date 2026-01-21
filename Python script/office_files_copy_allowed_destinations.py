@@ -23,23 +23,36 @@ def iter_copy_allowed_destinations(base_dir: Path) -> list[str]:
     return destinations
 
 
-def open_destinations(destinations: list[str]) -> None:
+def open_destinations(destinations: list[str], design_mode: bool) -> None:
     if os.name != "nt":
-        print("[WARN] Apertura de carpetas omitida: no es Windows.")
+        if design_mode:
+            print("[WARN] Apertura de carpetas omitida: no es Windows.")
         return
     for destination in destinations:
         try:
-            print(f"[OPEN] Intentando abrir carpeta {destination} con startfile.")
+            if design_mode:
+                print(f"[OPEN] Intentando abrir carpeta {destination} con startfile.")
             os.startfile(destination)  # type: ignore[arg-type]
         except OSError as exc:
-            print(
-                f"[WARN] No se pudo abrir carpeta con startfile ({exc}); reintentando con cmd."
-            )
+            if design_mode:
+                print(
+                    f"[WARN] No se pudo abrir carpeta con startfile ({exc}); reintentando con cmd."
+                )
             try:
-                print(f"[OPEN] Intentando abrir carpeta {destination} con cmd start.")
+                if design_mode:
+                    print(f"[OPEN] Intentando abrir carpeta {destination} con cmd start.")
                 subprocess.run(["cmd", "/c", "start", "", destination], check=False)
             except OSError as retry_exc:
-                print(f"[WARN] No se pudo abrir carpeta con cmd ({retry_exc})")
+                if design_mode:
+                    print(f"[WARN] No se pudo abrir carpeta con cmd ({retry_exc})")
+
+
+def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
+    destinations = iter_copy_allowed_destinations(base_dir)
+    open_destinations(destinations, design_mode)
+    if design_mode:
+        print({"destinations": destinations})
+    return destinations
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,11 +65,15 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         help="Carpeta a escanear (por defecto, la carpeta actual).",
     )
+    parser.add_argument(
+        "--design-mode",
+        action="store_true",
+        help="Muestra información de depuración y abre destinos.",
+    )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
-    destinations = iter_copy_allowed_destinations(base_dir)
-    open_destinations(destinations)
-    print({"destinations": destinations})
+    design_mode = args.design_mode
+    run_actions(base_dir, design_mode)
     return 0
 
 
