@@ -10,6 +10,11 @@ from typing import Callable, Iterable, Iterator, List, Optional
 import xml.etree.ElementTree as ET
 
 
+DEFAULT_ALLOWED_TEMPLATE_AUTHORS = [
+    "www.grada.cc",
+    "www.gradaz.com",
+]
+
 SUPPORTED_TEMPLATE_EXTENSIONS = {
     ".dotx",
     ".dotm",
@@ -19,11 +24,6 @@ SUPPORTED_TEMPLATE_EXTENSIONS = {
     ".xltm",
     ".thmx",
 }
-
-DEFAULT_ALLOWED_TEMPLATE_AUTHORS = [
-    "www.grada.cc",
-    "www.gradaz.com",
-]
 
 AUTHOR_VALIDATION_ENABLED = os.environ.get("AuthorValidationEnabled", "TRUE").lower() != "false"
 

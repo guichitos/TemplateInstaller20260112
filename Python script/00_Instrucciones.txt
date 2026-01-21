@@ -1,5 +1,10 @@
-pip install pyinstaller
-py -m PyInstaller --clean --onefile --console --name "1. Pin templates to Office apps home screen" installer_monolithic.py
-py -m PyInstaller --clean --onefile --console --name "2. Unpin templates from Office apps home screen" uninstaller_monolithic.py
+1. Instalar la libreria necesaria para generar el ejecutable. En una consola correr:
+    pip install pyinstaller
 
-py -m PyInstaller --clean --onefile --console --name "1. Pin templates to Office apps home screen" 01_installer.py
+2. Generar los ejecutables
+    py -m PyInstaller --clean --onefile --console --name "1. Pin templates to Office apps home screen" 01_installer.py
+    py -m PyInstaller --clean --onefile --console --name "2. Unpin templates from Office apps home screen" 02_uninstaller.py
+
+3. los archivos están dentro de la carpeta [dist]
+
+4. En el archivo [author_validation.py] es posible agregar y editar los autores autorizados.
