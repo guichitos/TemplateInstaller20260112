@@ -55,6 +55,14 @@ def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
     return destinations
 
 
+def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
+    destinations = iter_copy_allowed_destinations(base_dir)
+    open_destinations(destinations, design_mode)
+    if design_mode:
+        print({"destinations": destinations})
+    return destinations
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Listado único de destinos para archivos Office con permiso de copia.",
