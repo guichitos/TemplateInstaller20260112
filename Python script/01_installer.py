@@ -1,4 +1,4 @@
-"""Instalador único basado en la carpeta actual."""
+"""Single installer based on the current folder."""
 from __future__ import annotations
 
 import argparse
@@ -7,15 +7,15 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-# Configuración manual para el modo diseño.
-# - Establece en True para forzar modo diseño siempre.
-# - Establece en False para desactivarlo siempre.
-# - Dejar en None para usar la lógica normal basada en entorno.
+# Manual configuration for design mode.
+# - Set to True to force design mode on.
+# - Set to False to force design mode off.
+# - Leave as None to use the normal environment-based logic.
 MANUAL_IS_DESIGN_MODE: bool | None = False
 
 try:
     from . import common
-except ImportError:  # pragma: no cover - permite ejecución directa como script
+except ImportError:  # pragma: no cover - allow direct execution as a script
     import sys
 
     sys.path.append(str(Path(__file__).resolve().parent))
@@ -23,15 +23,15 @@ except ImportError:  # pragma: no cover - permite ejecución directa como script
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Instalador de plantillas de Office (Python)")
+    parser = argparse.ArgumentParser(description="Office template installer (Python)")
     parser.add_argument(
         "--allowed-authors",
-        help="Lista separada por ';' de autores permitidos.",
+        help="Semicolon-separated list of allowed authors.",
     )
     parser.add_argument(
         "--check-author",
         metavar="RUTA",
-        help="Solo valida autor de archivo/carpeta y termina.",
+        help="Only validate the author for a file/folder and exit.",
     )
     return parser.parse_args()
 
@@ -47,13 +47,13 @@ def main(argv: Iterable[str] | None = None) -> int:
     common.log_template_paths(resolved_paths, design_mode)
     if design_mode and common.DESIGN_LOG_PATHS:
         logging.getLogger(__name__).info(
-            "[INFO] Carpeta de plantillas extra WORD: %s", resolved_paths["CUSTOM_WORD"]
+            "[INFO] Extra template folder (WORD): %s", resolved_paths["CUSTOM_WORD"]
         )
         logging.getLogger(__name__).info(
-            "[INFO] Carpeta de plantillas extra POWERPOINT: %s", resolved_paths["CUSTOM_PPT"]
+            "[INFO] Extra template folder (POWERPOINT): %s", resolved_paths["CUSTOM_PPT"]
         )
         logging.getLogger(__name__).info(
-            "[INFO] Carpeta de plantillas extra EXCEL: %s", resolved_paths["CUSTOM_EXCEL"]
+            "[INFO] Extra template folder (EXCEL): %s", resolved_paths["CUSTOM_EXCEL"]
         )
 
     working_dir = Path.cwd()
@@ -61,7 +61,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     if base_dir == working_dir and common.path_in_appdata(working_dir):
         common.exit_with_error(
-            '[ERROR] No se recibió la ruta de las plantillas. Ejecute el instalador desde "1. Pin templates..." para que se le pase la carpeta correcta.',
+            '[ERROR] Template path was not provided. Run the installer from "1. Pin templates..." so the correct folder is passed in.',
             design_mode,
         )
 
@@ -86,7 +86,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     destinations = common.default_destinations()
     flags = common.InstallFlags()
 
-    # Plantillas base
+    # Base templates
     base_targets = [
         ("WORD", "Normal.dotx", destinations["WORD"]),
         ("WORD", "Normal.dotm", destinations["WORD"]),
@@ -113,7 +113,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             design_mode,
         )
 
-    # Plantillas personalizadas
+    # Custom templates
     common.copy_custom_templates(
         base_dir=base_dir,
         destinations=destinations,
@@ -126,7 +126,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     if design_mode and common.DESIGN_LOG_INSTALLER:
         logging.getLogger(__name__).info(
-            "[FINAL] Instalación completada. Archivos copiados=%s, errores=%s, bloqueados=%s.",
+            "[FINAL] Installation completed. Files copied=%s, errors=%s, blocked=%s.",
             flags.totals["files"],
             flags.totals["errors"],
             flags.totals["blocked"],
@@ -138,8 +138,8 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 def _print_intro(base_dir: Path, design_mode: bool) -> None:
     if design_mode and common.DESIGN_LOG_INSTALLER:
-        logging.getLogger(__name__).info("[DEBUG] Modo diseño habilitado=true")
-        logging.getLogger(__name__).info("[INFO] Carpeta base: %s", base_dir)
+        logging.getLogger(__name__).info("[DEBUG] Design mode enabled=true")
+        logging.getLogger(__name__).info("[INFO] Base folder: %s", base_dir)
     else:
         print("Installing custom templates and applying them as the new Microsoft Office defaults...")
 
@@ -168,11 +168,11 @@ def _run_post_install_actions(base_dir: Path, design_mode: bool) -> None:
     except OSError as exc:
         if design_mode and common.DESIGN_LOG_INSTALLER:
             logging.getLogger(__name__).warning(
-                "[WARN] No se pudieron ejecutar acciones post-instalación (%s)",
+                "[WARN] Post-install actions could not be executed (%s)",
                 exc,
             )
         elif not design_mode:
-            print(f"[WARN] No se pudieron ejecutar acciones post-instalación ({exc})")
+            print(f"[WARN] Post-install actions could not be executed ({exc})")
 
 
 if __name__ == "__main__":

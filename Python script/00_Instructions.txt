@@ -1,10 +1,10 @@
-1. Instalar la libreria necesaria para generar el ejecutable. En una consola correr:
+1. Install the library needed to generate the executable. In a console, run:
     pip install pyinstaller
 
-2. Generar los ejecutables
+2. Generate the executables
     py -m PyInstaller --clean --onefile --console --name "1. Pin templates to Office apps home screen" 01_installer.py
     py -m PyInstaller --clean --onefile --console --name "2. Unpin templates from Office apps home screen" 02_uninstaller.py
 
-3. los archivos están dentro de la carpeta [dist]
+3. The files are inside the [dist] folder
 
-4. En el archivo [author_validation.py] es posible agregar y editar los autores autorizados.
+4. In [author_validation.py] you can add and edit the allowed authors.

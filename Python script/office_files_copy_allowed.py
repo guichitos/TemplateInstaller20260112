@@ -1,4 +1,4 @@
-"""Listado de archivos Office con permiso de copia."""
+"""List Office files that allow copying."""
 from __future__ import annotations
 
 import argparse
@@ -15,13 +15,13 @@ def iter_copy_allowed_files(base_dir: Path) -> list[dict[str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Listado de archivos Office con permiso de copia (copy=true).",
+        description="List Office files that allow copying (copy=true).",
     )
     parser.add_argument(
         "base_dir",
         nargs="?",
         default=".",
-        help="Carpeta a escanear (por defecto, la carpeta actual).",
+        help="Folder to scan (defaults to the current folder).",
     )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
