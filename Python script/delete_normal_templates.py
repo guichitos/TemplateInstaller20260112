@@ -1,11 +1,11 @@
-"""Elimina plantillas Normal de Word en una ruta fija."""
+"""Delete Word Normal templates from a fixed path."""
 from __future__ import annotations
 
 from pathlib import Path
 
 try:
     from . import common
-except ImportError:  # pragma: no cover - permite ejecución directa como script
+except ImportError:  # pragma: no cover - allow direct execution as a script
     import sys
 
     sys.path.append(str(Path(__file__).resolve().parent))

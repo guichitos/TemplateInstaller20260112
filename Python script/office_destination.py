@@ -1,4 +1,4 @@
-"""Resolución del destino de plantillas Office."""
+"""Resolve the destination for Office templates."""
 from __future__ import annotations
 
 from pathlib import Path

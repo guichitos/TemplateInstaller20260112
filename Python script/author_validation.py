@@ -1,4 +1,4 @@
-"""Validación de autores en plantillas de Office."""
+"""Author validation for Office templates."""
 from __future__ import annotations
 
 import logging
@@ -67,7 +67,7 @@ def check_template_author(
     if not target.exists():
         return AuthorCheckResult(
             allowed=False,
-            message=f"[ERROR] No se encontró la ruta: \"{target}\"",
+            message=f"[ERROR] Path not found: \"{target}\"",
             authors=[],
             error=True,
         )
@@ -76,38 +76,38 @@ def check_template_author(
         authors_found: list[str] = []
         for file in iter_template_files(target):
             if file.suffix.lower() == ".thmx":
-                _log(logging.INFO, "Archivo: %s - Autor: [OMITIDO TEMA]", file.name)
+                _log(logging.INFO, "File: %s - Author: [THEME SKIPPED]", file.name)
                 continue
             author, error = _extract_author(file)
             if error:
                 _log(logging.WARNING, error)
             if author:
                 authors_found.append(author)
-                _log(logging.INFO, "Archivo: %s - Autor: %s", file.name, author)
+                _log(logging.INFO, "File: %s - Author: %s", file.name, author)
             else:
-                _log(logging.INFO, "Archivo: %s - Autor: [VACÍO]", file.name)
+                _log(logging.INFO, "File: %s - Author: [EMPTY]", file.name)
 
         message = (
-            f"[INFO] Autores listados para la carpeta \"{target}\"."
+            f"[INFO] Authors listed for folder \"{target}\"."
             if authors_found
-            else f"[WARN] No se encontraron plantillas en \"{target}\"."
+            else f"[WARN] No templates found in \"{target}\"."
         )
         return AuthorCheckResult(True, message, authors_found)
 
     if not validation_enabled:
-        return AuthorCheckResult(True, "[INFO] Validación de autores deshabilitada.", [])
+        return AuthorCheckResult(True, "[INFO] Author validation is disabled.", [])
 
     if target.suffix.lower() == ".thmx":
-        return AuthorCheckResult(True, "[INFO] Validación de autor omitida para temas.", [])
+        return AuthorCheckResult(True, "[INFO] Author validation skipped for themes.", [])
 
     author, error = _extract_author(target)
     if error:
         return AuthorCheckResult(False, error, [], error=True)
     if not author:
-        return AuthorCheckResult(False, f"[WARN] El archivo \"{target}\" no tiene autor asignado.", [])
+        return AuthorCheckResult(False, f"[WARN] File \"{target}\" has no assigned author.", [])
 
     is_allowed = any(author.lower() == a.lower() for a in allowed)
-    message = "[OK] Autor aprobado." if is_allowed else f"[BLOCKED] Autor no permitido para \"{target}\"."
+    message = "[OK] Author approved." if is_allowed else f"[BLOCKED] Author not allowed for \"{target}\"."
     return AuthorCheckResult(is_allowed, message, [author])
 
 
@@ -122,7 +122,7 @@ def _normalize_allowed_authors(authors: Iterable[str]) -> list[str]:
 
 def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
     if not template_path.exists():
-        return None, f"[ERROR] No se encontró la ruta: \"{template_path}\""
+        return None, f"[ERROR] Path not found: \"{template_path}\""
 
     try:
         with zipfile.ZipFile(template_path) as zipped:
@@ -130,7 +130,7 @@ def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
                 with zipped.open("docProps/core.xml") as core_file:
                     tree = ET.fromstring(core_file.read())
             except KeyError:
-                return None, f"[WARN] No se pudo obtener el autor para \"{template_path.name}\" (core.xml ausente)."
+                return None, f"[WARN] Could not read author for \"{template_path.name}\" (core.xml missing)."
     except Exception as exc:  # noqa: BLE001
         return None, f"[ERROR] {template_path.name}: {exc}"
 
@@ -138,4 +138,4 @@ def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
         node = tree.find(candidate)
         if node is not None and node.text:
             return node.text.strip(), None
-    return None, f"[WARN] \"{template_path.name}\" sin autor definido."
+    return None, f"[WARN] \"{template_path.name}\" has no author defined."

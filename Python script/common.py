@@ -1,4 +1,4 @@
-"""Funciones compartidas para instalar/desinstalar plantillas de Office."""
+"""Shared helpers for installing/uninstalling Office templates."""
 from __future__ import annotations
 
 import logging
@@ -31,16 +31,16 @@ import path_utils  # type: ignore  # noqa: E402
 
 try:
     import winreg  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - entornos no Windows
+except Exception:  # pragma: no cover - non-Windows environments
     winreg = None  # type: ignore[assignment]
 
 LOGGER = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
-# Flags manuales de diseño (override de variables de entorno)
+# Manual design flags (override environment variables)
 # --------------------------------------------------------------------------- #
-# Pon en True/False para forzar logs por categoría; deja en None para usar
-# la variable de entorno correspondiente o, en su defecto, IsDesignModeEnabled.
+# Set to True/False to force logs by category; leave None to use the
+# corresponding environment variable or, if missing, IsDesignModeEnabled.
 MANUAL_DESIGN_LOG_PATHS: bool | None = False
 MANUAL_DESIGN_LOG_MRU: bool | None = False
 MANUAL_DESIGN_LOG_AUTHOR: bool | None = False
@@ -85,7 +85,7 @@ DESIGN_LOG_UNINSTALLER = _design_flag("DesignLogUninstaller", MANUAL_DESIGN_LOG_
 
 
 def refresh_design_log_flags(effective_design_mode: bool) -> None:
-    """Actualiza los flags de diseño para esta ejecución en base al modo efectivo."""
+    """Update design flags for this run based on the effective mode."""
     global DESIGN_LOG_PATHS, DESIGN_LOG_MRU
     global DESIGN_LOG_AUTHOR, DESIGN_LOG_COPY_BASE, DESIGN_LOG_COPY_CUSTOM, DESIGN_LOG_BACKUP
     global DESIGN_LOG_CLOSE_APPS, DESIGN_LOG_INSTALLER, DESIGN_LOG_UNINSTALLER
@@ -132,7 +132,7 @@ BASE_TEMPLATE_NAMES = {
 
 
 # --------------------------------------------------------------------------- #
-# Helpers genéricos
+# Generic helpers
 # --------------------------------------------------------------------------- #
 
 
@@ -142,7 +142,7 @@ def ensure_directory(path: Path) -> Path:
 
 
 def resolve_base_directory(base_dir: Path) -> Path:
-    """Usa únicamente la ruta actual como base para las plantillas."""
+    """Use only the current path as the base for templates."""
     return normalize_path(base_dir)
 
 
@@ -168,7 +168,7 @@ def _design_log(enabled: bool, design_mode: bool, level: int, message: str, *arg
 
 
 # --------------------------------------------------------------------------- #
-# Instalación / desinstalación
+# Installation / uninstallation
 # --------------------------------------------------------------------------- #
 
 
@@ -193,7 +193,7 @@ def install_template(
     destination = destination_root / filename
 
     if not source.exists():
-        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.WARNING, "[WARNING] Archivo fuente no encontrado: %s", source)
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.WARNING, "[WARNING] Source file not found: %s", source)
         flags.totals["errors"] += 1
         return
 
@@ -219,11 +219,11 @@ def install_template(
     try:
         ensure_parents_and_copy(source, destination)
         flags.totals["files"] += 1
-        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.INFO, "[OK] Copiado %s a %s", filename, destination)
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.INFO, "[OK] Copied %s to %s", filename, destination)
         _update_mru_if_applicable(app_label, destination, design_mode)
     except OSError as exc:
         flags.totals["errors"] += 1
-        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.ERROR, "[ERROR] Copy failed for %s (%s)", filename, exc)
         return
 
 
@@ -242,7 +242,7 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
         else:
             destination_root = _destination_for_extension(extension, destinations)
         if destination_root is None:
-            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.WARNING, "[WARNING] No hay destino para %s", filename)
+            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.WARNING, "[WARNING] No destination for %s", filename)
             continue
 
         result = check_template_author(
@@ -272,14 +272,14 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
                 DESIGN_LOG_COPY_CUSTOM,
                 design_mode,
                 logging.INFO,
-                "[OK] Copiado %s a %s",
+                "[OK] Copied %s to %s",
                 filename,
                 target_path,
             )
             _update_mru_if_applicable_extension(extension, target_path, design_mode)
         except OSError as exc:
             flags.totals["errors"] += 1
-            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
+            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Copy failed for %s (%s)", filename, exc)
             continue
 
 
@@ -303,27 +303,27 @@ def remove_installed_templates(
                     DESIGN_LOG_UNINSTALLER,
                     design_mode,
                     logging.INFO,
-                    "[INFO] Verificando %s",
+                    "[INFO] Checking %s",
                     target,
                 )
                 if not target.exists():
-                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] No existe %s", target)
+                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Does not exist %s", target)
                     continue
                 backup_existing(target, design_mode)
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminando %s", target)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleting %s", target)
                 target.unlink()
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", target)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleted %s", target)
                 if target.exists():
                     _design_log(
                         DESIGN_LOG_UNINSTALLER,
                         design_mode,
                         logging.WARNING,
-                        "[WARN] Persistió el archivo tras borrar: %s",
+                        "[WARN] File persisted after deletion: %s",
                         target,
                     )
                     failures.append(target)
             except OSError as exc:
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", target, exc)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Could not delete %s (%s)", target, exc)
                 failures.append(target)
     if failures:
         summary = ", ".join(str(path) for path in failures)
@@ -331,7 +331,7 @@ def remove_installed_templates(
             DESIGN_LOG_UNINSTALLER,
             design_mode,
             logging.WARNING,
-            "[WARN] Quedaron archivos sin eliminar. Cierra Office/Outlook y reintenta: %s",
+            "[WARN] Files remained after deletion. Close Office/Outlook and try again: %s",
             summary,
         )
 
@@ -343,25 +343,25 @@ def remove_normal_templates(
     if emit is None:
         emit = lambda message: _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, message)
     template_dir = resolve_template_paths()["ROAMING"]
-    emit('[INFO] Ruta obtenida desde common.resolve_template_paths()["ROAMING"]')
-    emit(f"[INFO] Ruta de plantillas (ROAMING): {template_dir}")
+    emit('[INFO] Path retrieved from common.resolve_template_paths()["ROAMING"]')
+    emit(f"[INFO] Template path (ROAMING): {template_dir}")
     if not template_dir.exists():
-        emit(f"[ERROR] La carpeta no existe: {template_dir}")
+        emit(f"[ERROR] Folder does not exist: {template_dir}")
         return
     targets = ("Normal.dotx", "Normal.dotm", "NormalEmail.dotx", "NormalEmail.dotm")
     for filename in targets:
         target = template_dir / filename
         if not target.exists():
-            emit(f"[SKIP] No existe: {target}")
+            emit(f"[SKIP] Does not exist: {target}")
             continue
         try:
             target.unlink()
             if target.exists():
-                emit(f"[WARN] Persistió tras borrar: {target}")
+                emit(f"[WARN] Persisted after deletion: {target}")
             else:
-                emit(f"[OK] Eliminado: {target}")
+                emit(f"[OK] Deleted: {target}")
         except OSError as exc:
-            emit(f"[ERROR] No se pudo eliminar {target} ({exc})")
+            emit(f"[ERROR] Could not delete {target} ({exc})")
 
 
 def delete_custom_copies(
@@ -378,15 +378,15 @@ def delete_custom_copies(
             try:
                 if candidate.exists():
                     if design_mode:
-                        print(f"[DELETE] Eliminando archivo: {candidate}")
+                        print(f"[DELETE] Deleting file: {candidate}")
                     candidate.unlink()
-                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", candidate)
+                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleted %s", candidate)
             except OSError as exc:
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", candidate, exc)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Could not delete %s (%s)", candidate, exc)
 
 
 def clear_mru_entries_for_payload(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
-    """Quita de las MRU las plantillas incluidas en la payload y las plantillas base."""
+    """Remove MRU entries for payload templates and base templates."""
     if not is_windows() or winreg is None:
         return
     targets = _collect_mru_targets(base_dir, destinations)
@@ -415,13 +415,13 @@ def backup_existing(target_file: Path, design_mode: bool) -> None:
     backup_path = backup_dir / f"{timestamp} - {target_file.name}"
     try:
         shutil.copy2(target_file, backup_path)
-        _design_log(DESIGN_LOG_BACKUP, design_mode, logging.INFO, "[BACKUP] Copia creada en %s", backup_path)
+        _design_log(DESIGN_LOG_BACKUP, design_mode, logging.INFO, "[BACKUP] Copy created at %s", backup_path)
     except OSError as exc:
         _design_log(
             DESIGN_LOG_BACKUP,
             design_mode,
             logging.WARNING,
-            "[WARN] No se pudo crear backup de %s (%s)",
+            "[WARN] Could not create backup of %s (%s)",
             target_file,
             exc,
         )
@@ -459,7 +459,7 @@ def _should_update_mru(path: Path) -> bool:
 
 
 def _collect_mru_targets(base_dir: Path, destinations: dict[str, Path]) -> list[Path]:
-    """Devuelve rutas potenciales a limpiar de las MRU (base + payload personalizada)."""
+    """Return potential MRU paths to clear (base + custom payload)."""
     targets: set[Path] = set()
     # Base templates
     base_targets = {
@@ -495,16 +495,16 @@ def _collect_mru_targets(base_dir: Path, destinations: dict[str, Path]) -> list[
 def _clear_mru_for_app(app_label: str, target_paths: Set[str], design_mode: bool) -> None:
     mru_paths = _find_mru_paths(app_label)
     if design_mode and DESIGN_LOG_MRU:
-        LOGGER.info("[MRU] Limpieza para %s, rutas objetivo=%s", app_label, sorted(target_paths))
+        LOGGER.info("[MRU] Cleanup for %s, target paths=%s", app_label, sorted(target_paths))
     for mru_path in mru_paths:
         try:
             _rewrite_mru_excluding(mru_path, target_paths, design_mode)
         except OSError as exc:
-            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] No se pudo limpiar %s (%s)", mru_path, exc)
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] Could not clean %s (%s)", mru_path, exc)
 
 
 # --------------------------------------------------------------------------- #
-# Utilidades plataforma
+# Platform utilities
 # --------------------------------------------------------------------------- #
 
 
@@ -520,7 +520,7 @@ def close_office_apps(design_mode: bool) -> None:
         try:
             os.system(f"taskkill /IM {exe} /F >nul 2>&1")
         except OSError:
-            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] No se pudo cerrar %s", exe)
+            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] Could not close %s", exe)
     for exe in processes:
         try:
             result = subprocess.run(
@@ -532,13 +532,13 @@ def close_office_apps(design_mode: bool) -> None:
             if exe.lower() in output.lower():
                 os.system(f"taskkill /IM {exe} /F >nul 2>&1")
         except OSError:
-            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] No se pudo verificar %s", exe)
+            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] Could not verify %s", exe)
 
 
 
 
 # --------------------------------------------------------------------------- #
-# Utilidades de ruta
+# Path utilities
 # --------------------------------------------------------------------------- #
 
 
@@ -572,7 +572,7 @@ def log_template_paths(paths: dict[str, Path], design_mode: bool) -> None:
     if not design_mode or not DESIGN_LOG_PATHS:
         return
     logger = logging.getLogger(__name__)
-    logger.info("================= RUTAS CALCULADAS =================")
+    logger.info("================= CALCULATED PATHS =================")
     logger.info("THEME_PATH                  = %s", paths["THEME"])
     logger.info("CUSTOM_WORD_TEMPLATE_PATH   = %s", paths["CUSTOM_WORD"])
     logger.info("CUSTOM_PPT_TEMPLATE_PATH    = %s", paths["CUSTOM_PPT"])
@@ -597,12 +597,12 @@ def log_template_folder_contents(paths: dict[str, Path], design_mode: bool) -> N
     for label, folder in targets:
         try:
             if not folder.exists():
-                logger.info("[INFO] %s no existe: %s", label, folder)
+                logger.info("[INFO] %s does not exist: %s", label, folder)
                 continue
             files = sorted(p.name for p in folder.iterdir() if p.is_file())
-            logger.info("[INFO] %s (%s): %s", label, folder, ", ".join(files) if files else "[vacío]")
+            logger.info("[INFO] %s (%s): %s", label, folder, ", ".join(files) if files else "[empty]")
         except OSError as exc:
-            logger.warning("[WARN] No se pudo listar %s (%s)", folder, exc)
+            logger.warning("[WARN] Could not list %s (%s)", folder, exc)
 
 
 def log_registry_sources(design_mode: bool) -> None:
@@ -633,12 +633,12 @@ def log_registry_sources(design_mode: bool) -> None:
         r"Software\Microsoft\Office\\16.0\\Common\\General",
         "UserTemplates",
     )
-    logger.info("[REG] Word PersonalTemplates: %s", word_personal or "[no valor]")
-    logger.info("[REG] Word UserTemplates: %s", word_user or "[no valor]")
-    logger.info("[REG] PowerPoint PersonalTemplates: %s", ppt_personal or "[no valor]")
-    logger.info("[REG] PowerPoint UserTemplates: %s", ppt_user or "[no valor]")
-    logger.info("[REG] Excel PersonalTemplates: %s", excel_personal or "[no valor]")
-    logger.info("[REG] Excel UserTemplates: %s", excel_user or "[no valor]")
+    logger.info("[REG] Word PersonalTemplates: %s", word_personal or "[no value]")
+    logger.info("[REG] Word UserTemplates: %s", word_user or "[no value]")
+    logger.info("[REG] PowerPoint PersonalTemplates: %s", ppt_personal or "[no value]")
+    logger.info("[REG] PowerPoint UserTemplates: %s", ppt_user or "[no value]")
+    logger.info("[REG] Excel PersonalTemplates: %s", excel_personal or "[no value]")
+    logger.info("[REG] Excel UserTemplates: %s", excel_user or "[no value]")
 
 
 def update_mru_for_template(app_label: str, file_path: Path, design_mode: bool) -> None:
@@ -646,13 +646,13 @@ def update_mru_for_template(app_label: str, file_path: Path, design_mode: bool) 
         return
     mru_paths = _find_mru_paths(app_label)
     if design_mode and DESIGN_LOG_MRU:
-        LOGGER.info("[MRU] Actualizando MRU para %s en rutas: %s", app_label, mru_paths)
+        LOGGER.info("[MRU] Updating MRU for %s at paths: %s", app_label, mru_paths)
     for mru_path in mru_paths:
         try:
             _write_mru_entry(mru_path, file_path, design_mode)
         except OSError as exc:
             if design_mode and DESIGN_LOG_MRU:
-                LOGGER.warning("[MRU] No se pudo escribir en %s (%s)", mru_path, exc)
+                LOGGER.warning("[MRU] Could not write to %s (%s)", mru_path, exc)
 
 
 def _find_mru_paths(app_label: str) -> list[str]:
@@ -663,7 +663,7 @@ def _find_mru_paths(app_label: str) -> list[str]:
     versions = ("16.0", "15.0", "14.0", "12.0")
     for version in versions:
         base = fr"Software\Microsoft\Office\{version}\{reg_name}\Recent Templates"
-        # Prefer LiveID/ADAL containers si existen
+        # Prefer LiveID/ADAL containers if they exist
         if winreg:
             try:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base) as root:
@@ -675,7 +675,7 @@ def _find_mru_paths(app_label: str) -> list[str]:
             except OSError:
                 pass
         roots.append(f"HKCU\\{base}\\File MRU")
-    # Deduplicar manteniendo orden
+    # Deduplicate while preserving order
     seen: set[str] = set()
     ordered: list[str] = []
     for path in roots:
@@ -705,7 +705,7 @@ def _write_mru_entry(reg_path: str, file_path: Path, design_mode: bool) -> None:
     except OSError:
         return
     with key:
-        # Leer entradas existentes
+        # Read existing entries
         existing_items: list[tuple[int, str]] = []
         index = 0
         try:
@@ -726,27 +726,27 @@ def _write_mru_entry(reg_path: str, file_path: Path, design_mode: bool) -> None:
                 index += 1
         except OSError:
             pass
-        # Filtrar duplicados del mismo path
+        # Filter duplicates for the same path
         filtered = []
         for _, value in existing_items:
             if full_path.lower() == value.lower():
                 continue
             filtered.append(value)
-        # Preparar nueva lista con el archivo al frente
+        # Prepare new list with the file at the front
         new_entries: list[str] = [full_path] + filtered
-        # Limitar, p.ej., a 10 entradas
+        # Limit to e.g. 10 entries
         new_entries = new_entries[:10]
-        # Reescribir
+        # Rewrite
         for idx, entry in enumerate(new_entries, start=1):
             item_name = f"Item {idx}"
             meta_name = f"Item Metadata {idx}"
             reg_value = f"{MRU_VALUE_PREFIX}{entry}"
             meta_value = f"<Metadata><AppSpecific><id>{entry}</id><nm>{basename}</nm><du>{entry}</du></AppSpecific></Metadata>"
             _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] %s -> %s", item_name, entry)
-            _design_log(DESIGN_LOG_MRU, design_mode, logging.DEBUG, "[MRU] %s (nombre=%s)", meta_name, basename)
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.DEBUG, "[MRU] %s (name=%s)", meta_name, basename)
             winreg.SetValueEx(key, item_name, 0, winreg.REG_SZ, reg_value)
             winreg.SetValueEx(key, meta_name, 0, winreg.REG_SZ, meta_value)
-        _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] %s actualizado con %s", reg_path, full_path)
+        _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] %s updated with %s", reg_path, full_path)
 
 
 def _extract_mru_path(raw_value: str) -> Optional[str]:
@@ -759,7 +759,7 @@ def _extract_mru_path(raw_value: str) -> Optional[str]:
 
 
 def _rewrite_mru_excluding(mru_path: str, targets: Set[str], design_mode: bool) -> None:
-    """Reescribe la MRU excluyendo rutas en targets, reindexando los items."""
+    """Rewrite the MRU excluding target paths and reindex items."""
     if winreg is None:
         return
     hive, subkey = mru_path.split("\\", 1)
@@ -795,7 +795,7 @@ def _rewrite_mru_excluding(mru_path: str, targets: Set[str], design_mode: bool) 
                 index += 1
         except OSError:
             pass
-        # Eliminar todo antes de reescribir
+        # Delete everything before rewriting
         try:
             index = 0
             while True:
@@ -806,7 +806,7 @@ def _rewrite_mru_excluding(mru_path: str, targets: Set[str], design_mode: bool) 
                 index += 1
         except OSError:
             pass
-        # Filtrar y reindexar
+        # Filter and reindex
         target_lowers = {t.lower() for t in targets}
         filtered: list[tuple[str, str]] = []
         for idx_num, value in sorted(items, key=lambda x: x[0]):
@@ -818,7 +818,7 @@ def _rewrite_mru_excluding(mru_path: str, targets: Set[str], design_mode: bool) 
         for new_idx, (val, meta_val) in enumerate(filtered, start=1):
             item_name = f"Item {new_idx}"
             meta_name = f"Item Metadata {new_idx}"
-            _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] Limpieza %s -> %s", item_name, _extract_mru_path(val) or val)
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] Cleanup %s -> %s", item_name, _extract_mru_path(val) or val)
             winreg.SetValueEx(key, item_name, 0, winreg.REG_SZ, val)
             if meta_val:
                 winreg.SetValueEx(key, meta_name, 0, winreg.REG_SZ, meta_val)
