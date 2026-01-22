@@ -1,0 +1,1138 @@
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import zipfile
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Iterable, Iterator, List, Optional, Set
+import xml.etree.ElementTree as ET
+
+
+MANUAL_IS_DESIGN_MODE: bool | None = True
+MANUAL_DESIGN_LOG_PATHS: bool | None = False
+MANUAL_DESIGN_LOG_MRU: bool | None = False
+MANUAL_DESIGN_LOG_AUTHOR: bool | None = False
+MANUAL_DESIGN_LOG_COPY_BASE: bool | None = False
+MANUAL_DESIGN_LOG_COPY_CUSTOM: bool | None = False
+MANUAL_DESIGN_LOG_BACKUP: bool | None = False
+MANUAL_DESIGN_LOG_CLOSE_APPS: bool | None = False
+MANUAL_DESIGN_LOG_INSTALLER: bool | None = False
+MANUAL_DESIGN_LOG_UNINSTALLER: bool | None = False
+
+try:
+    import winreg  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover - entornos no Windows
+    winreg = None  # type: ignore[assignment]
+
+LOGGER = logging.getLogger(__name__)
+
+_BASE_PATHS = None
+
+
+def normalize_path(path: Path | str | None) -> Path:
+    if path is None:
+        return Path()
+    return Path(str(path).strip().rstrip("\\/"))
+
+
+def _read_registry_value(path: str, name: str) -> Optional[str]:
+    if winreg is None:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+            value, _ = winreg.QueryValueEx(key, name)
+            return os.path.expandvars(str(value))
+    except OSError:
+        return None
+
+
+def _resolve_appdata_path() -> Path:
+    appdata = _read_registry_value(
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders", "AppData"
+    )
+    if not appdata:
+        appdata = os.environ.get("APPDATA")
+    return normalize_path(appdata or (Path.home() / "AppData" / "Roaming"))
+
+
+def _resolve_documents_path() -> Path:
+    documents = _read_registry_value(
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders", "Personal"
+    )
+    if not documents:
+        documents = os.environ.get("USERPROFILE")
+        if documents:
+            documents = str(Path(documents) / "Documents")
+    return normalize_path(documents or (Path.home() / "Documents"))
+
+
+def _resolve_custom_template_path(default_custom_dir: Path) -> Path:
+    if winreg:
+        for version in ("16.0", "15.0", "14.0", "12.0"):
+            value = _read_registry_value(
+                fr"Software\Microsoft\Office\{version}\Word\Options", "PersonalTemplates"
+            )
+            if value:
+                return normalize_path(value)
+        for version in ("16.0", "15.0", "14.0", "12.0"):
+            value = _read_registry_value(
+                fr"Software\Microsoft\Office\{version}\Common\General", "UserTemplates"
+            )
+            if value:
+                return normalize_path(value)
+    return normalize_path(default_custom_dir)
+
+
+def _resolve_custom_alt_path(custom_primary: Path, default_custom_dir: Path, default_alt_dir: Path) -> Path:
+    if winreg:
+        for version in ("16.0", "15.0", "14.0", "12.0"):
+            value = _read_registry_value(
+                fr"Software\Microsoft\Office\{version}\PowerPoint\Options", "PersonalTemplates"
+            )
+            if value:
+                return normalize_path(value)
+        for version in ("16.0", "15.0", "14.0", "12.0"):
+            value = _read_registry_value(
+                fr"Software\Microsoft\Office\{version}\Common\General", "UserTemplates"
+            )
+            if value:
+                return normalize_path(value)
+    return normalize_path(custom_primary or default_custom_dir or default_alt_dir)
+
+
+def _resolve_excel_template_path(custom_primary: Path, default_custom_dir: Path, default_alt_dir: Path) -> Path:
+    if winreg:
+        for version in ("16.0", "15.0", "14.0", "12.0"):
+            value = _read_registry_value(
+                fr"Software\Microsoft\Office\{version}\Excel\Options", "PersonalTemplates"
+            )
+            if value:
+                return normalize_path(value)
+        for version in ("16.0", "15.0", "14.0", "12.0"):
+            value = _read_registry_value(
+                fr"Software\Microsoft\Office\{version}\Common\General", "UserTemplates"
+            )
+            if value:
+                return normalize_path(value)
+    return normalize_path(custom_primary or default_custom_dir or default_alt_dir)
+
+
+def _resolve_base_paths() -> dict[str, Path]:
+    documents_path = _resolve_documents_path()
+    default_custom_dir = documents_path / "Custom Office Templates"
+    custom_word = _resolve_custom_template_path(default_custom_dir)
+    custom_ppt = _resolve_custom_alt_path(custom_word, default_custom_dir, default_custom_dir)
+    custom_excel = _resolve_excel_template_path(custom_word, default_custom_dir, default_custom_dir)
+    appdata_path = _resolve_appdata_path()
+    return {
+        "APPDATA": appdata_path,
+        "DOCUMENTS": documents_path,
+        "CUSTOM_WORD": custom_word,
+        "CUSTOM_PPT": custom_ppt,
+        "CUSTOM_EXCEL": custom_excel,
+        "THEME": appdata_path / "Microsoft" / "Templates" / "Document Themes",
+        "ROAMING": appdata_path / "Microsoft" / "Templates",
+        "EXCEL_STARTUP": appdata_path / "Microsoft" / "Excel" / "XLSTART",
+    }
+
+
+_BASE_PATHS = _resolve_base_paths()
+APPDATA_PATH = _BASE_PATHS["APPDATA"]
+DOCUMENTS_PATH = _BASE_PATHS["DOCUMENTS"]
+
+DEFAULT_ALLOWED_TEMPLATE_AUTHORS = [
+    "www.grada.cc",
+    "www.gradaz.com",
+]
+
+DEFAULT_DESIGN_MODE = False
+AUTHOR_VALIDATION_ENABLED = True
+MRU_VALUE_PREFIX = "[F00000000][T01ED6D7E58D00000][O00000000]*"
+
+
+def _design_flag(env_var: str, manual_override: bool | None, fallback: bool) -> bool:
+    return False
+
+
+DESIGN_LOG_PATHS = _design_flag("DesignLogPaths", MANUAL_DESIGN_LOG_PATHS, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_MRU = _design_flag("DesignLogMRU", MANUAL_DESIGN_LOG_MRU, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_AUTHOR = _design_flag("DesignLogAuthor", MANUAL_DESIGN_LOG_AUTHOR, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_COPY_BASE = _design_flag("DesignLogCopyBase", MANUAL_DESIGN_LOG_COPY_BASE, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_COPY_CUSTOM = _design_flag("DesignLogCopyCustom", MANUAL_DESIGN_LOG_COPY_CUSTOM, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_BACKUP = _design_flag("DesignLogBackup", MANUAL_DESIGN_LOG_BACKUP, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_CLOSE_APPS = _design_flag("DesignLogCloseApps", MANUAL_DESIGN_LOG_CLOSE_APPS, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_INSTALLER = _design_flag("DesignLogInstaller", MANUAL_DESIGN_LOG_INSTALLER, DEFAULT_DESIGN_MODE)
+DESIGN_LOG_UNINSTALLER = _design_flag("DesignLogUninstaller", MANUAL_DESIGN_LOG_UNINSTALLER, DEFAULT_DESIGN_MODE)
+
+
+def refresh_design_log_flags(effective_design_mode: bool) -> None:
+    global DESIGN_LOG_PATHS, DESIGN_LOG_MRU
+    global DESIGN_LOG_AUTHOR, DESIGN_LOG_COPY_BASE, DESIGN_LOG_COPY_CUSTOM, DESIGN_LOG_BACKUP
+    global DESIGN_LOG_CLOSE_APPS, DESIGN_LOG_INSTALLER, DESIGN_LOG_UNINSTALLER
+    DESIGN_LOG_PATHS = False
+    DESIGN_LOG_MRU = False
+    DESIGN_LOG_AUTHOR = False
+    DESIGN_LOG_COPY_BASE = False
+    DESIGN_LOG_COPY_CUSTOM = False
+    DESIGN_LOG_BACKUP = False
+    DESIGN_LOG_CLOSE_APPS = False
+    DESIGN_LOG_INSTALLER = False
+    DESIGN_LOG_UNINSTALLER = False
+
+
+DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH = normalize_path(
+    os.environ.get("CUSTOM_OFFICE_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_WORD"])
+)
+DEFAULT_POWERPOINT_TEMPLATE_PATH = normalize_path(
+    os.environ.get("POWERPOINT_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_PPT"])
+)
+DEFAULT_EXCEL_TEMPLATE_PATH = normalize_path(
+    os.environ.get("EXCEL_TEMPLATE_PATH", _BASE_PATHS["CUSTOM_EXCEL"])
+)
+DEFAULT_ROAMING_TEMPLATE_FOLDER = normalize_path(
+    os.environ.get("ROAMING_TEMPLATE_FOLDER_PATH", _BASE_PATHS["ROAMING"])
+)
+DEFAULT_EXCEL_STARTUP_FOLDER = normalize_path(
+    os.environ.get("EXCEL_STARTUP_FOLDER_PATH", _BASE_PATHS["EXCEL_STARTUP"])
+)
+DEFAULT_THEME_FOLDER = normalize_path(_BASE_PATHS["THEME"])
+
+SUPPORTED_TEMPLATE_EXTENSIONS = {
+    ".dotx",
+    ".dotm",
+    ".potx",
+    ".potm",
+    ".xltx",
+    ".xltm",
+    ".thmx",
+}
+
+BASE_TEMPLATE_NAMES = {
+    "Normal.dotx",
+    "Normal.dotm",
+    "NormalEmail.dotx",
+    "NormalEmail.dotm",
+    "Blank.potx",
+    "Blank.potm",
+    "Book.xltx",
+    "Book.xltm",
+    "Sheet.xltx",
+    "Sheet.xltm",
+}
+
+
+# --------------------------------------------------------------------------- #
+# Generic helpers
+# --------------------------------------------------------------------------- #
+
+
+def ensure_directory(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def iter_template_files(base_dir: Path) -> Iterator[Path]:
+    for ext in SUPPORTED_TEMPLATE_EXTENSIONS:
+        yield from base_dir.glob(f"*{ext}")
+
+
+def resolve_base_directory(base_dir: Path) -> Path:
+    """Use only the current path as the base for templates."""
+    return normalize_path(base_dir)
+
+
+def path_in_appdata(path: Path) -> bool:
+    try:
+        return normalize_path(path).resolve().as_posix().startswith(
+            normalize_path(APPDATA_PATH).resolve().as_posix()
+        )
+    except OSError:
+        return False
+
+
+def ensure_parents_and_copy(source: Path, destination: Path) -> None:
+    ensure_directory(destination.parent)
+    shutil.copy2(source, destination)
+
+
+def _design_log(enabled: bool, design_mode: bool, level: int, message: str, *args: object) -> None:
+    return
+
+
+# --------------------------------------------------------------------------- #
+# Authoring
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class AuthorCheckResult:
+    allowed: bool
+    message: str
+    authors: List[str]
+    error: bool = False
+
+    def as_cli_output(self) -> str:
+        return "TRUE" if self.allowed and not self.error else "FALSE"
+
+
+def check_template_author(
+    target: Path,
+    allowed_authors: Iterable[str] | None = None,
+    validation_enabled: bool = True,
+    design_mode: bool = False,
+) -> AuthorCheckResult:
+    allowed = _normalize_allowed_authors(allowed_authors or DEFAULT_ALLOWED_TEMPLATE_AUTHORS)
+    target = normalize_path(target)
+
+    if not target.exists():
+        return AuthorCheckResult(
+            allowed=False,
+            message=f"[ERROR] Path not found: \"{target}\"",
+            authors=[],
+            error=True,
+        )
+
+    if target.is_dir():
+        authors_found: list[str] = []
+        for file in iter_template_files(target):
+            if file.suffix.lower() == ".thmx":
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "File: %s - Author: [THEME SKIPPED]", file.name)
+                continue
+            author, error = _extract_author(file)
+            if error:
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, error)
+            if author:
+                authors_found.append(author)
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "File: %s - Author: %s", file.name, author)
+            else:
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "File: %s - Author: [EMPTY]", file.name)
+
+        message = (
+            f"[INFO] Authors listed for folder \"{target}\"."
+            if authors_found
+            else f"[WARN] No templates found in \"{target}\"."
+        )
+        return AuthorCheckResult(True, message, authors_found)
+
+    if not validation_enabled:
+        return AuthorCheckResult(True, "[INFO] Author validation is disabled.", [])
+
+    if target.suffix.lower() == ".thmx":
+        return AuthorCheckResult(True, "[INFO] Author validation skipped for themes.", [])
+
+    author, error = _extract_author(target)
+    if error:
+        return AuthorCheckResult(False, error, [], error=True)
+    if not author:
+        return AuthorCheckResult(False, f"[WARN] File \"{target}\" has no assigned author.", [])
+
+    is_allowed = any(author.lower() == a.lower() for a in allowed)
+    message = "[OK] Author approved." if is_allowed else f"[BLOCKED] Author not allowed for \"{target}\"."
+    return AuthorCheckResult(is_allowed, message, [author])
+
+
+def _normalize_allowed_authors(authors: Iterable[str]) -> list[str]:
+    normalized: list[str] = []
+    for author in authors:
+        cleaned = author.strip()
+        if cleaned:
+            normalized.append(cleaned)
+    return normalized
+
+
+def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
+    if not template_path.exists():
+        return None, f"[ERROR] Path not found: \"{template_path}\""
+
+    try:
+        with zipfile.ZipFile(template_path) as zipped:
+            try:
+                with zipped.open("docProps/core.xml") as core_file:
+                    tree = ET.fromstring(core_file.read())
+            except KeyError:
+                return None, f"[WARN] Could not read author for \"{template_path.name}\" (core.xml missing)."
+    except Exception as exc:  # noqa: BLE001
+        return None, f"[ERROR] {template_path.name}: {exc}"
+
+    for candidate in ("{http://purl.org/dc/elements/1.1/}creator", "creator"):
+        node = tree.find(candidate)
+        if node is not None and node.text:
+            return node.text.strip(), None
+    return None, f"[WARN] \"{template_path.name}\" has no author defined."
+
+
+# --------------------------------------------------------------------------- #
+# Installation / uninstallation
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class InstallFlags:
+    totals: dict[str, int] = field(default_factory=lambda: {"files": 0, "errors": 0, "blocked": 0})
+
+
+def install_template(
+    app_label: str,
+    filename: str,
+    source_root: Path,
+    destination_root: Path,
+    destinations_map: dict[str, Path],
+    flags: InstallFlags,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+    design_mode: bool,
+) -> None:
+    source = normalize_path(source_root / filename)
+    destination_root = ensure_directory(normalize_path(destination_root))
+    destination = destination_root / filename
+
+    if not source.exists():
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.WARNING, "[WARNING] Archivo fuente no encontrado: %s", source)
+        flags.totals["errors"] += 1
+        return
+
+    author_check = check_template_author(
+        source,
+        allowed_authors=allowed_authors,
+        validation_enabled=validation_enabled,
+        design_mode=design_mode,
+    )
+    if not author_check.allowed:
+        _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, author_check.message)
+        flags.totals["blocked"] += 1
+        return
+
+    backup_existing(destination, design_mode)
+    try:
+        ensure_parents_and_copy(source, destination)
+        flags.totals["files"] += 1
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.INFO, "[OK] Copiado %s a %s", filename, destination)
+        _update_mru_if_applicable(app_label, destination, design_mode)
+    except OSError as exc:
+        flags.totals["errors"] += 1
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.ERROR, "[ERROR] Copy failed for %s (%s)", filename, exc)
+        return
+
+
+def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: InstallFlags, allowed: Iterable[str], validation_enabled: bool, design_mode: bool) -> None:
+    for file in iter_template_files(base_dir):
+        filename = file.name
+        extension = file.suffix.lower()
+        if filename in BASE_TEMPLATE_NAMES:
+            continue
+        if extension in {".xltx", ".xltm"}:
+            destination_root = destinations["EXCEL_CUSTOM"]
+        elif extension in {".dotx", ".dotm"}:
+            destination_root = destinations["WORD_CUSTOM"]
+        elif extension in {".potx", ".potm"}:
+            destination_root = destinations["POWERPOINT_CUSTOM"]
+        else:
+            destination_root = _destination_for_extension(extension, destinations)
+        if destination_root is None:
+            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.WARNING, "[WARNING] No hay destino para %s", filename)
+            continue
+
+        result = check_template_author(
+            file,
+            allowed_authors=allowed,
+            validation_enabled=validation_enabled,
+            design_mode=design_mode,
+        )
+        if not result.allowed:
+            flags.totals["blocked"] += 1
+            _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, result.message)
+            continue
+
+        target_path = destination_root / filename
+        backup_existing(target_path, design_mode)
+        try:
+            ensure_parents_and_copy(file, target_path)
+            flags.totals["files"] += 1
+            _design_log(
+                DESIGN_LOG_COPY_CUSTOM,
+                design_mode,
+                logging.INFO,
+                "[OK] Copiado %s a %s",
+                filename,
+                target_path,
+            )
+            _update_mru_if_applicable_extension(extension, target_path, design_mode)
+        except OSError as exc:
+            flags.totals["errors"] += 1
+            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Copy failed for %s (%s)", filename, exc)
+            continue
+
+
+def remove_installed_templates(destinations: dict[str, Path], design_mode: bool) -> None:
+    targets = {
+        destinations["WORD"]: ["Normal.dotx", "Normal.dotm", "NormalEmail.dotx", "NormalEmail.dotm"],
+        destinations["POWERPOINT"]: ["Blank.potx", "Blank.potm"],
+        destinations["EXCEL"]: ["Book.xltx", "Book.xltm", "Sheet.xltx", "Sheet.xltm"],
+        destinations["THEMES"]: [],
+    }
+    for root, files in targets.items():
+        for name in files:
+            target = normalize_path(root / name)
+            try:
+                if not target.exists():
+                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] No existe %s", target)
+                    continue
+                backup_existing(target, design_mode)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleting %s", target)
+                target.unlink()
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleted %s", target)
+                if target.exists():
+                    _design_log(
+                        DESIGN_LOG_UNINSTALLER,
+                        design_mode,
+                        logging.WARNING,
+                        "[WARN] File persisted after deletion: %s",
+                        target,
+                    )
+            except OSError as exc:
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Could not delete %s (%s)", target, exc)
+
+
+def delete_custom_copies(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
+    for file in iter_template_files(base_dir):
+        if file.name in BASE_TEMPLATE_NAMES:
+            continue
+        for dest in destinations.values():
+            candidate = normalize_path(dest / file.name)
+            try:
+                if candidate.exists():
+                    candidate.unlink()
+                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleted %s", candidate)
+            except OSError as exc:
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Could not delete %s (%s)", candidate, exc)
+
+
+def clear_mru_entries_for_payload(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
+    """Remove MRU entries for payload templates and base templates."""
+    if not is_windows() or winreg is None:
+        return
+    targets = _collect_mru_targets(base_dir, destinations)
+    if not targets:
+        return
+    grouped: dict[str, set[str]] = {"WORD": set(), "POWERPOINT": set(), "EXCEL": set()}
+    for path in targets:
+        ext = path.suffix.lower()
+        if ext in {".dotx", ".dotm"}:
+            grouped["WORD"].add(str(path))
+        elif ext in {".potx", ".potm"}:
+            grouped["POWERPOINT"].add(str(path))
+        elif ext in {".xltx", ".xltm"}:
+            grouped["EXCEL"].add(str(path))
+    for app_label, paths in grouped.items():
+        if paths:
+            _clear_mru_for_app(app_label, paths, design_mode)
+
+
+def backup_existing(target_file: Path, design_mode: bool) -> None:
+    if not target_file.exists():
+        return
+    backup_dir = target_file.parent / "Backups"
+    ensure_directory(backup_dir)
+    timestamp = datetime.now().strftime("%Y.%m.%d.%H%M")
+    backup_path = backup_dir / f"{timestamp} - {target_file.name}"
+    try:
+        shutil.copy2(target_file, backup_path)
+        _design_log(DESIGN_LOG_BACKUP, design_mode, logging.INFO, "[BACKUP] Copy created at %s", backup_path)
+    except OSError as exc:
+        _design_log(
+            DESIGN_LOG_BACKUP,
+            design_mode,
+            logging.WARNING,
+            "[WARN] Could not create backup of %s (%s)",
+            target_file,
+            exc,
+        )
+
+
+
+
+def _update_mru_if_applicable(app_label: str, destination: Path, design_mode: bool) -> None:
+    if not _should_update_mru(destination):
+        return
+    ext = destination.suffix.lower()
+    if ext in {".dotx", ".dotm", ".potx", ".potm", ".xltx", ".xltm"}:
+        update_mru_for_template(app_label, destination, design_mode)
+
+
+def _update_mru_if_applicable_extension(extension: str, destination: Path, design_mode: bool) -> None:
+    if not _should_update_mru(destination):
+        return
+    if extension in {".dotx", ".dotm"}:
+        update_mru_for_template("WORD", destination, design_mode)
+    if extension in {".potx", ".potm"}:
+        update_mru_for_template("POWERPOINT", destination, design_mode)
+    if extension in {".xltx", ".xltm"}:
+        update_mru_for_template("EXCEL", destination, design_mode)
+
+
+def _should_update_mru(path: Path) -> bool:
+    name = path.name
+    ext = path.suffix.lower()
+    if name in BASE_TEMPLATE_NAMES:
+        return False
+    if ext == ".thmx":
+        return False
+    return True
+
+
+def _collect_mru_targets(base_dir: Path, destinations: dict[str, Path]) -> list[Path]:
+    """Devuelve rutas potenciales a limpiar de las MRU (base + payload personalizada)."""
+    targets: set[Path] = set()
+    base_targets = {
+        "WORD": ["Normal.dotx", "Normal.dotm", "NormalEmail.dotx", "NormalEmail.dotm"],
+        "POWERPOINT": ["Blank.potx", "Blank.potm"],
+        "EXCEL": ["Book.xltx", "Book.xltm", "Sheet.xltx", "Sheet.xltm"],
+    }
+    for app, names in base_targets.items():
+        dest = destinations.get(app)
+        if dest:
+            for name in names:
+                targets.add(normalize_path(dest / name))
+    for file in iter_template_files(base_dir):
+        if file.name in BASE_TEMPLATE_NAMES:
+            continue
+        ext = file.suffix.lower()
+        if ext == ".thmx":
+            continue
+        if ext in {".dotx", ".dotm"}:
+            dest = destinations.get("WORD_CUSTOM")
+        elif ext in {".potx", ".potm"}:
+            dest = destinations.get("POWERPOINT_CUSTOM")
+        elif ext in {".xltx", ".xltm"}:
+            dest = destinations.get("EXCEL_CUSTOM")
+        else:
+            dest = _destination_for_extension(ext, destinations)
+        if dest:
+            targets.add(normalize_path(dest / file.name))
+    return list(targets)
+
+
+def _clear_mru_for_app(app_label: str, target_paths: Set[str], design_mode: bool) -> None:
+    mru_paths = _find_mru_paths(app_label)
+    if design_mode and DESIGN_LOG_MRU:
+        LOGGER.info("[MRU] Limpieza para %s, rutas objetivo=%s", app_label, sorted(target_paths))
+    for mru_path in mru_paths:
+        try:
+            _rewrite_mru_excluding(mru_path, target_paths, design_mode)
+        except OSError as exc:
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] Could not clean %s (%s)", mru_path, exc)
+
+
+# --------------------------------------------------------------------------- #
+# Utilidades plataforma
+# --------------------------------------------------------------------------- #
+
+
+def is_windows() -> bool:
+    return os.name == "nt"
+
+
+def close_office_apps(design_mode: bool) -> None:
+    if not is_windows():
+        return
+    processes = ("WINWORD.EXE", "POWERPNT.EXE", "EXCEL.EXE", "OUTLOOK.EXE")
+    for exe in processes:
+        try:
+            os.system(f"taskkill /IM {exe} /F >nul 2>&1")
+        except OSError:
+            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] Could not close %s", exe)
+    for exe in processes:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {exe}", "/NH"],
+                capture_output=True,
+                text=True,
+            )
+            output = (result.stdout or "") + (result.stderr or "")
+            if exe.lower() in output.lower():
+                os.system(f"taskkill /IM {exe} /F >nul 2>&1")
+        except OSError:
+            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] Could not verify %s", exe)
+
+
+
+
+# --------------------------------------------------------------------------- #
+# Utilidades de ruta
+# --------------------------------------------------------------------------- #
+
+
+def default_destinations() -> dict[str, Path]:
+    paths = resolve_template_paths()
+    return {
+        "WORD": paths["ROAMING"],
+        "POWERPOINT": paths["ROAMING"],
+        "EXCEL": paths["EXCEL"],
+        "CUSTOM": paths["CUSTOM_WORD"],
+        "WORD_CUSTOM": paths["CUSTOM_WORD"],
+        "POWERPOINT_CUSTOM": paths["CUSTOM_PPT"],
+        "EXCEL_CUSTOM": paths["CUSTOM_EXCEL"],
+        "ROAMING": paths["ROAMING"],
+        "THEMES": paths["THEME"],
+    }
+
+
+def resolve_template_paths() -> dict[str, Path]:
+    return {
+        "THEME": DEFAULT_THEME_FOLDER,
+        "CUSTOM_WORD": DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
+        "CUSTOM_PPT": DEFAULT_POWERPOINT_TEMPLATE_PATH or DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
+        "CUSTOM_EXCEL": DEFAULT_EXCEL_TEMPLATE_PATH or DEFAULT_CUSTOM_OFFICE_TEMPLATE_PATH,
+        "ROAMING": DEFAULT_ROAMING_TEMPLATE_FOLDER,
+        "EXCEL": DEFAULT_EXCEL_STARTUP_FOLDER,
+    }
+
+
+def log_template_paths(paths: dict[str, Path], design_mode: bool) -> None:
+    return
+
+
+def log_registry_sources(design_mode: bool) -> None:
+    return
+
+
+def update_mru_for_template(app_label: str, file_path: Path, design_mode: bool) -> None:
+    if not is_windows() or winreg is None:
+        return
+    mru_paths = _find_mru_paths(app_label)
+    if design_mode and DESIGN_LOG_MRU:
+        LOGGER.info("[MRU] Actualizando MRU para %s en rutas: %s", app_label, mru_paths)
+    for mru_path in mru_paths:
+        try:
+            _write_mru_entry(mru_path, file_path, design_mode)
+        except OSError as exc:
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] Could not write to %s (%s)", mru_path, exc)
+
+
+def _find_mru_paths(app_label: str) -> list[str]:
+    reg_name = _app_registry_name(app_label)
+    if not reg_name:
+        return []
+    roots: list[str] = []
+    versions = ("16.0", "15.0", "14.0", "12.0")
+    for version in versions:
+        base = fr"Software\Microsoft\Office\{version}\{reg_name}\Recent Templates"
+        if winreg:
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base) as root:
+                    sub_count = winreg.QueryInfoKey(root)[0]
+                    for idx in range(sub_count):
+                        sub = winreg.EnumKey(root, idx)
+                        if sub.upper().startswith("ADAL_") or sub.upper().startswith("LIVEID_"):
+                            roots.append(f"HKCU\\{base}\\{sub}\\File MRU")
+            except OSError:
+                pass
+        roots.append(f"HKCU\\{base}\\File MRU")
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for path in roots:
+        if path not in seen:
+            seen.add(path)
+            ordered.append(path)
+    return ordered
+
+
+def _app_registry_name(app_label: str) -> str:
+    mapping = {"WORD": "Word", "POWERPOINT": "PowerPoint", "EXCEL": "Excel"}
+    return mapping.get(app_label.upper(), "")
+
+
+def _write_mru_entry(reg_path: str, file_path: Path, design_mode: bool) -> None:
+    if winreg is None:
+        return
+    file_path = normalize_path(file_path)
+    full_path = str(file_path)
+    basename = file_path.stem
+    hive, subkey = reg_path.split("\\", 1)
+    hive_obj = winreg.HKEY_CURRENT_USER if hive.upper() == "HKCU" else None
+    if hive_obj is None:
+        return
+    try:
+        key = winreg.CreateKeyEx(hive_obj, subkey, 0, winreg.KEY_ALL_ACCESS)
+    except OSError:
+        return
+    with key:
+        existing_items: list[tuple[int, str]] = []
+        index = 0
+        try:
+            while True:
+                name, value, _ = winreg.EnumValue(key, index)
+                if name.startswith("Item Metadata "):
+                    index += 1
+                    continue
+                if name.startswith("Item "):
+                    try:
+                        num = int(name.split(" ", 1)[1])
+                    except Exception:
+                        num = 0
+                    if isinstance(value, str):
+                        extracted = _extract_mru_path(value)
+                        if extracted:
+                            existing_items.append((num, extracted))
+                index += 1
+        except OSError:
+            pass
+        filtered = []
+        for _, value in existing_items:
+            if full_path.lower() == value.lower():
+                continue
+            filtered.append(value)
+        new_entries: list[str] = [full_path] + filtered
+        new_entries = new_entries[:10]
+        for idx, entry in enumerate(new_entries, start=1):
+            item_name = f"Item {idx}"
+            meta_name = f"Item Metadata {idx}"
+            reg_value = f"{MRU_VALUE_PREFIX}{entry}"
+            meta_value = f"<Metadata><AppSpecific><id>{entry}</id><nm>{basename}</nm><du>{entry}</du></AppSpecific></Metadata>"
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] %s -> %s", item_name, entry)
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.DEBUG, "[MRU] %s (nombre=%s)", meta_name, basename)
+            winreg.SetValueEx(key, item_name, 0, winreg.REG_SZ, reg_value)
+            winreg.SetValueEx(key, meta_name, 0, winreg.REG_SZ, meta_value)
+        _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] %s actualizado con %s", reg_path, full_path)
+
+
+def _extract_mru_path(raw_value: str) -> Optional[str]:
+    if not raw_value:
+        return None
+    if "*" in raw_value:
+        candidate = raw_value.split("*")[-1]
+        return candidate.strip() or None
+    return raw_value.strip() or None
+
+
+def _rewrite_mru_excluding(mru_path: str, targets: Set[str], design_mode: bool) -> None:
+    """Reescribe la MRU excluyendo rutas en targets, reindexando los items."""
+    if winreg is None:
+        return
+    hive, subkey = mru_path.split("\\", 1)
+    hive_obj = winreg.HKEY_CURRENT_USER if hive.upper() == "HKCU" else None
+    if hive_obj is None:
+        return
+    try:
+        key = winreg.CreateKeyEx(hive_obj, subkey, 0, winreg.KEY_ALL_ACCESS)
+    except OSError:
+        return
+    with key:
+        items: list[tuple[int, str]] = []
+        metadata: dict[int, str] = {}
+        index = 0
+        try:
+            while True:
+                name, value, _ = winreg.EnumValue(key, index)
+                if not isinstance(value, str):
+                    index += 1
+                    continue
+                if name.startswith("Item Metadata "):
+                    try:
+                        num = int(name.split(" ", 2)[2])
+                        metadata[num] = value
+                    except Exception:
+                        pass
+                elif name.startswith("Item "):
+                    try:
+                        num = int(name.split(" ", 1)[1])
+                    except Exception:
+                        num = 0
+                    items.append((num, value))
+                index += 1
+        except OSError:
+            pass
+        try:
+            index = 0
+            while True:
+                name, _, _ = winreg.EnumValue(key, index)
+                if name.startswith("Item"):
+                    winreg.DeleteValue(key, name)
+                    continue
+                index += 1
+        except OSError:
+            pass
+        target_lowers = {t.lower() for t in targets}
+        filtered: list[tuple[str, str]] = []
+        for idx_num, value in sorted(items, key=lambda x: x[0]):
+            path = _extract_mru_path(value)
+            if path and path.lower() in target_lowers:
+                continue
+            meta_val = metadata.get(idx_num, "")
+            filtered.append((value, meta_val))
+        for new_idx, (val, meta_val) in enumerate(filtered, start=1):
+            item_name = f"Item {new_idx}"
+            meta_name = f"Item Metadata {new_idx}"
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.INFO, "[MRU] Limpieza %s -> %s", item_name, _extract_mru_path(val) or val)
+            winreg.SetValueEx(key, item_name, 0, winreg.REG_SZ, val)
+            if meta_val:
+                winreg.SetValueEx(key, meta_name, 0, winreg.REG_SZ, meta_val)
+
+
+def _destination_for_extension(extension: str, destinations: dict[str, Path]) -> Optional[Path]:
+    if extension in {".dotx", ".dotm"}:
+        return destinations["WORD"]
+    if extension in {".potx", ".potm"}:
+        return destinations["POWERPOINT"]
+    if extension in {".xltx", ".xltm"}:
+        return destinations["EXCEL"]
+    if extension == ".thmx":
+        return destinations["THEMES"]
+    return None
+
+
+def _resolve_destination_for_name(
+    name: str,
+    paths: dict[str, Path],
+    base_names: Iterable[str] = BASE_TEMPLATE_NAMES,
+) -> Optional[Path]:
+    extension = Path(name).suffix.lower()
+    if name in base_names:
+        if name.startswith(("Normal.", "NormalEmail.", "Blank.")):
+            return paths["ROAMING"]
+        if name.startswith(("Book.", "Sheet.")):
+            return paths["EXCEL"]
+    if extension in {".dotx", ".dotm"}:
+        return paths["CUSTOM_WORD"]
+    if extension in {".potx", ".potm"}:
+        return paths["CUSTOM_PPT"]
+    if extension in {".xltx", ".xltm"}:
+        return paths["CUSTOM_EXCEL"]
+    if extension == ".thmx":
+        return paths["THEME"]
+    return None
+
+
+def _resolve_app_label(extension: str) -> str:
+    if extension in {".dotx", ".dotm"}:
+        return "WORD"
+    if extension in {".potx", ".potm", ".thmx"}:
+        return "POWERPOINT"
+    if extension in {".xltx", ".xltm"}:
+        return "EXCEL"
+    return ""
+
+
+def _iter_copy_allowed_items(
+    base_dir: Path,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+) -> list[dict[str, str]]:
+    paths = resolve_template_paths()
+    items: list[dict[str, str]] = []
+    for ext in SUPPORTED_TEMPLATE_EXTENSIONS:
+        for path in base_dir.glob(f"*{ext}"):
+            if not path.is_file():
+                continue
+            result = check_template_author(
+                path,
+                allowed_authors=allowed_authors,
+                validation_enabled=validation_enabled,
+            )
+            if not result.allowed:
+                continue
+            destination_root = _resolve_destination_for_name(path.name, paths)
+            app_label = _resolve_app_label(path.suffix.lower())
+            items.append(
+                {
+                    "destination": str(destination_root.resolve()) if destination_root else "",
+                    "app": app_label,
+                }
+            )
+    return items
+
+
+def _collect_unique_values(items: list[dict[str, str]], key: str) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+    for item in items:
+        value = item.get(key, "")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
+def _open_destinations(destinations: list[str]) -> None:
+    if os.name != "nt":
+        return
+    for destination in destinations:
+        try:
+            os.startfile(destination)  # type: ignore[arg-type]
+        except OSError:
+            try:
+                subprocess.run(["cmd", "/c", "start", "", destination], check=False)
+            except OSError:
+                continue
+
+
+def _launch_apps(apps: list[str]) -> None:
+    if os.name != "nt":
+        return
+    mapping = {
+        "WORD": "winword.exe",
+        "POWERPOINT": "powerpnt.exe",
+        "EXCEL": "excel.exe",
+    }
+    for app in apps:
+        exe = mapping.get(app)
+        if not exe:
+            continue
+        try:
+            os.startfile(exe)  # type: ignore[arg-type]
+        except OSError:
+            try:
+                subprocess.run(["cmd", "/c", "start", "", exe], check=False)
+            except OSError:
+                continue
+
+
+def configure_logging(design_mode: bool) -> None:
+    return
+
+
+def exit_with_error(message: str) -> None:
+    print(message)
+    sys.exit(1)
+
+
+# --------------------------------------------------------------------------- #
+# Instalador
+# --------------------------------------------------------------------------- #
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Office template installer (Python monolithic)")
+    parser.add_argument(
+        "--allowed-authors",
+        help="Lista separada por ';' de autores permitidos.",
+    )
+    parser.add_argument(
+        "--check-author",
+        metavar="RUTA",
+        help="Solo valida autor de archivo/carpeta y termina.",
+    )
+    return parser.parse_args()
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    args = parse_args()
+    design_mode = _resolve_design_mode()
+    refresh_design_log_flags(design_mode)
+
+    resolved_paths = resolve_template_paths()
+    log_registry_sources(design_mode)
+    log_template_paths(resolved_paths, design_mode)
+
+    working_dir = Path.cwd()
+    base_dir = resolve_base_directory(working_dir)
+
+    if base_dir == working_dir and path_in_appdata(working_dir):
+        exit_with_error(
+            '[ERROR] Template path was not provided. Run the installer from "1. Pin templates..." so the correct folder is passed in.'
+        )
+
+    allowed_authors = _resolve_allowed_authors(args.allowed_authors)
+    validation_enabled = AUTHOR_VALIDATION_ENABLED
+
+    if args.check_author:
+        result = check_template_author(
+            Path(args.check_author),
+            allowed_authors=allowed_authors,
+            validation_enabled=validation_enabled,
+            design_mode=design_mode,
+        )
+        print(result.as_cli_output())
+        return 0 if result.allowed else 1
+
+    _print_intro(base_dir, design_mode)
+    close_office_apps(design_mode)
+
+    destinations = default_destinations()
+    flags = InstallFlags()
+
+    base_targets = [
+        ("WORD", "Normal.dotx", destinations["WORD"]),
+        ("WORD", "Normal.dotm", destinations["WORD"]),
+        ("WORD", "NormalEmail.dotx", destinations["WORD"]),
+        ("WORD", "NormalEmail.dotm", destinations["WORD"]),
+        ("POWERPOINT", "Blank.potx", destinations["POWERPOINT"]),
+        ("POWERPOINT", "Blank.potm", destinations["POWERPOINT"]),
+        ("EXCEL", "Book.xltx", destinations["EXCEL"]),
+        ("EXCEL", "Book.xltm", destinations["EXCEL"]),
+        ("EXCEL", "Sheet.xltx", destinations["EXCEL"]),
+        ("EXCEL", "Sheet.xltm", destinations["EXCEL"]),
+    ]
+
+    for app_label, filename, destination in base_targets:
+        install_template(
+            app_label,
+            filename,
+            base_dir,
+            destination,
+            destinations,
+            flags,
+            allowed_authors,
+            validation_enabled,
+            design_mode,
+        )
+
+    copy_custom_templates(
+        base_dir=base_dir,
+        destinations=destinations,
+        flags=flags,
+        allowed=allowed_authors,
+        validation_enabled=validation_enabled,
+        design_mode=design_mode,
+    )
+    _run_post_install_actions(base_dir, design_mode, allowed_authors, validation_enabled)
+
+    if not design_mode:
+        print("Ready")
+    return 0
+
+
+def _print_intro(base_dir: Path, design_mode: bool) -> None:
+    print("Installing custom templates and applying them as the new Microsoft Office defaults...")
+
+
+def _resolve_allowed_authors(cli_value: str | None) -> list[str]:
+    env_value = os.environ.get("AllowedTemplateAuthors")
+    raw = cli_value or env_value
+    if not raw:
+        return DEFAULT_ALLOWED_TEMPLATE_AUTHORS
+    return [author.strip() for author in raw.split(";") if author.strip()]
+
+
+def _resolve_design_mode() -> bool:
+    if MANUAL_IS_DESIGN_MODE is not None:
+        return bool(MANUAL_IS_DESIGN_MODE)
+    return bool(DEFAULT_DESIGN_MODE)
+
+
+def _run_post_install_actions(
+    base_dir: Path,
+    design_mode: bool,
+    allowed_authors: Iterable[str],
+    validation_enabled: bool,
+) -> None:
+    items = _iter_copy_allowed_items(
+        base_dir,
+        allowed_authors=allowed_authors,
+        validation_enabled=validation_enabled,
+    )
+    destinations = _collect_unique_values(items, "destination")
+    apps = _collect_unique_values(items, "app")
+    _open_destinations(destinations)
+    _launch_apps(apps)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
