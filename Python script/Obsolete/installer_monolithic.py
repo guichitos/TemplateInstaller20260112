@@ -228,7 +228,7 @@ BASE_TEMPLATE_NAMES = {
 
 
 # --------------------------------------------------------------------------- #
-# Helpers genéricos
+# Generic helpers
 # --------------------------------------------------------------------------- #
 
 
@@ -243,7 +243,7 @@ def iter_template_files(base_dir: Path) -> Iterator[Path]:
 
 
 def resolve_base_directory(base_dir: Path) -> Path:
-    """Usa únicamente la ruta actual como base para las plantillas."""
+    """Use only the current path as the base for templates."""
     return normalize_path(base_dir)
 
 
@@ -266,7 +266,7 @@ def _design_log(enabled: bool, design_mode: bool, level: int, message: str, *arg
 
 
 # --------------------------------------------------------------------------- #
-# Autoría
+# Authoring
 # --------------------------------------------------------------------------- #
 
 
@@ -293,7 +293,7 @@ def check_template_author(
     if not target.exists():
         return AuthorCheckResult(
             allowed=False,
-            message=f"[ERROR] No se encontró la ruta: \"{target}\"",
+            message=f"[ERROR] Path not found: \"{target}\"",
             authors=[],
             error=True,
         )
@@ -302,38 +302,38 @@ def check_template_author(
         authors_found: list[str] = []
         for file in iter_template_files(target):
             if file.suffix.lower() == ".thmx":
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "Archivo: %s - Autor: [OMITIDO TEMA]", file.name)
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "File: %s - Author: [THEME SKIPPED]", file.name)
                 continue
             author, error = _extract_author(file)
             if error:
                 _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.WARNING, error)
             if author:
                 authors_found.append(author)
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "Archivo: %s - Autor: %s", file.name, author)
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "File: %s - Author: %s", file.name, author)
             else:
-                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "Archivo: %s - Autor: [VACÍO]", file.name)
+                _design_log(DESIGN_LOG_AUTHOR, design_mode, logging.INFO, "File: %s - Author: [EMPTY]", file.name)
 
         message = (
-            f"[INFO] Autores listados para la carpeta \"{target}\"."
+            f"[INFO] Authors listed for folder \"{target}\"."
             if authors_found
-            else f"[WARN] No se encontraron plantillas en \"{target}\"."
+            else f"[WARN] No templates found in \"{target}\"."
         )
         return AuthorCheckResult(True, message, authors_found)
 
     if not validation_enabled:
-        return AuthorCheckResult(True, "[INFO] Validación de autores deshabilitada.", [])
+        return AuthorCheckResult(True, "[INFO] Author validation is disabled.", [])
 
     if target.suffix.lower() == ".thmx":
-        return AuthorCheckResult(True, "[INFO] Validación de autor omitida para temas.", [])
+        return AuthorCheckResult(True, "[INFO] Author validation skipped for themes.", [])
 
     author, error = _extract_author(target)
     if error:
         return AuthorCheckResult(False, error, [], error=True)
     if not author:
-        return AuthorCheckResult(False, f"[WARN] El archivo \"{target}\" no tiene autor asignado.", [])
+        return AuthorCheckResult(False, f"[WARN] File \"{target}\" has no assigned author.", [])
 
     is_allowed = any(author.lower() == a.lower() for a in allowed)
-    message = "[OK] Autor aprobado." if is_allowed else f"[BLOCKED] Autor no permitido para \"{target}\"."
+    message = "[OK] Author approved." if is_allowed else f"[BLOCKED] Author not allowed for \"{target}\"."
     return AuthorCheckResult(is_allowed, message, [author])
 
 
@@ -348,7 +348,7 @@ def _normalize_allowed_authors(authors: Iterable[str]) -> list[str]:
 
 def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
     if not template_path.exists():
-        return None, f"[ERROR] No se encontró la ruta: \"{template_path}\""
+        return None, f"[ERROR] Path not found: \"{template_path}\""
 
     try:
         with zipfile.ZipFile(template_path) as zipped:
@@ -356,7 +356,7 @@ def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
                 with zipped.open("docProps/core.xml") as core_file:
                     tree = ET.fromstring(core_file.read())
             except KeyError:
-                return None, f"[WARN] No se pudo obtener el autor para \"{template_path.name}\" (core.xml ausente)."
+                return None, f"[WARN] Could not read author for \"{template_path.name}\" (core.xml missing)."
     except Exception as exc:  # noqa: BLE001
         return None, f"[ERROR] {template_path.name}: {exc}"
 
@@ -364,11 +364,11 @@ def _extract_author(template_path: Path) -> tuple[Optional[str], Optional[str]]:
         node = tree.find(candidate)
         if node is not None and node.text:
             return node.text.strip(), None
-    return None, f"[WARN] \"{template_path.name}\" sin autor definido."
+    return None, f"[WARN] \"{template_path.name}\" has no author defined."
 
 
 # --------------------------------------------------------------------------- #
-# Instalación / desinstalación
+# Installation / uninstallation
 # --------------------------------------------------------------------------- #
 
 
@@ -416,7 +416,7 @@ def install_template(
         _update_mru_if_applicable(app_label, destination, design_mode)
     except OSError as exc:
         flags.totals["errors"] += 1
-        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
+        _design_log(DESIGN_LOG_COPY_BASE, design_mode, logging.ERROR, "[ERROR] Copy failed for %s (%s)", filename, exc)
         return
 
 
@@ -465,7 +465,7 @@ def copy_custom_templates(base_dir: Path, destinations: dict[str, Path], flags: 
             _update_mru_if_applicable_extension(extension, target_path, design_mode)
         except OSError as exc:
             flags.totals["errors"] += 1
-            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Falló la copia de %s (%s)", filename, exc)
+            _design_log(DESIGN_LOG_COPY_CUSTOM, design_mode, logging.ERROR, "[ERROR] Copy failed for %s (%s)", filename, exc)
             continue
 
 
@@ -484,19 +484,19 @@ def remove_installed_templates(destinations: dict[str, Path], design_mode: bool)
                     _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] No existe %s", target)
                     continue
                 backup_existing(target, design_mode)
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminando %s", target)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleting %s", target)
                 target.unlink()
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", target)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleted %s", target)
                 if target.exists():
                     _design_log(
                         DESIGN_LOG_UNINSTALLER,
                         design_mode,
                         logging.WARNING,
-                        "[WARN] Persistió el archivo tras borrar: %s",
+                        "[WARN] File persisted after deletion: %s",
                         target,
                     )
             except OSError as exc:
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", target, exc)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Could not delete %s (%s)", target, exc)
 
 
 def delete_custom_copies(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
@@ -508,13 +508,13 @@ def delete_custom_copies(base_dir: Path, destinations: dict[str, Path], design_m
             try:
                 if candidate.exists():
                     candidate.unlink()
-                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Eliminado %s", candidate)
+                    _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.INFO, "[INFO] Deleted %s", candidate)
             except OSError as exc:
-                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] No se pudo eliminar %s (%s)", candidate, exc)
+                _design_log(DESIGN_LOG_UNINSTALLER, design_mode, logging.WARNING, "[WARN] Could not delete %s (%s)", candidate, exc)
 
 
 def clear_mru_entries_for_payload(base_dir: Path, destinations: dict[str, Path], design_mode: bool) -> None:
-    """Quita de las MRU las plantillas incluidas en la payload y las plantillas base."""
+    """Remove MRU entries for payload templates and base templates."""
     if not is_windows() or winreg is None:
         return
     targets = _collect_mru_targets(base_dir, destinations)
@@ -543,13 +543,13 @@ def backup_existing(target_file: Path, design_mode: bool) -> None:
     backup_path = backup_dir / f"{timestamp} - {target_file.name}"
     try:
         shutil.copy2(target_file, backup_path)
-        _design_log(DESIGN_LOG_BACKUP, design_mode, logging.INFO, "[BACKUP] Copia creada en %s", backup_path)
+        _design_log(DESIGN_LOG_BACKUP, design_mode, logging.INFO, "[BACKUP] Copy created at %s", backup_path)
     except OSError as exc:
         _design_log(
             DESIGN_LOG_BACKUP,
             design_mode,
             logging.WARNING,
-            "[WARN] No se pudo crear backup de %s (%s)",
+            "[WARN] Could not create backup of %s (%s)",
             target_file,
             exc,
         )
@@ -626,7 +626,7 @@ def _clear_mru_for_app(app_label: str, target_paths: Set[str], design_mode: bool
         try:
             _rewrite_mru_excluding(mru_path, target_paths, design_mode)
         except OSError as exc:
-            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] No se pudo limpiar %s (%s)", mru_path, exc)
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] Could not clean %s (%s)", mru_path, exc)
 
 
 # --------------------------------------------------------------------------- #
@@ -646,7 +646,7 @@ def close_office_apps(design_mode: bool) -> None:
         try:
             os.system(f"taskkill /IM {exe} /F >nul 2>&1")
         except OSError:
-            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] No se pudo cerrar %s", exe)
+            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] Could not close %s", exe)
     for exe in processes:
         try:
             result = subprocess.run(
@@ -658,7 +658,7 @@ def close_office_apps(design_mode: bool) -> None:
             if exe.lower() in output.lower():
                 os.system(f"taskkill /IM {exe} /F >nul 2>&1")
         except OSError:
-            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] No se pudo verificar %s", exe)
+            _design_log(DESIGN_LOG_CLOSE_APPS, design_mode, logging.DEBUG, "[DEBUG] Could not verify %s", exe)
 
 
 
@@ -712,7 +712,7 @@ def update_mru_for_template(app_label: str, file_path: Path, design_mode: bool) 
         try:
             _write_mru_entry(mru_path, file_path, design_mode)
         except OSError as exc:
-            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] No se pudo escribir en %s (%s)", mru_path, exc)
+            _design_log(DESIGN_LOG_MRU, design_mode, logging.WARNING, "[MRU] Could not write to %s (%s)", mru_path, exc)
 
 
 def _find_mru_paths(app_label: str) -> list[str]:
@@ -1009,7 +1009,7 @@ def exit_with_error(message: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Instalador de plantillas de Office (Python monolítico)")
+    parser = argparse.ArgumentParser(description="Office template installer (Python monolithic)")
     parser.add_argument(
         "--allowed-authors",
         help="Lista separada por ';' de autores permitidos.",
@@ -1036,7 +1036,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     if base_dir == working_dir and path_in_appdata(working_dir):
         exit_with_error(
-            '[ERROR] No se recibió la ruta de las plantillas. Ejecute el instalador desde "1. Pin templates..." para que se le pase la carpeta correcta.'
+            '[ERROR] Template path was not provided. Run the installer from "1. Pin templates..." so the correct folder is passed in.'
         )
 
     allowed_authors = _resolve_allowed_authors(args.allowed_authors)

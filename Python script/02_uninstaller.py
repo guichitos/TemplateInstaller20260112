@@ -1,19 +1,19 @@
-"""Desinstalador único basado en la carpeta actual."""
+"""Single uninstaller based on the current folder."""
 from __future__ import annotations
 
 import argparse
 import logging
 from pathlib import Path
 
-# Configuración manual para el modo diseño.
-# - Establece en True para forzar modo diseño siempre.
-# - Establece en False para desactivarlo siempre.
-# - Deja en None para usar la lógica normal basada en entorno.
+# Manual configuration for design mode.
+# - Set to True to force design mode on.
+# - Set to False to force design mode off.
+# - Leave as None to use the normal environment-based logic.
 MANUAL_IS_DESIGN_MODE: bool | None = None
 
 try:
     from . import common
-except ImportError:  # pragma: no cover - permite ejecución directa como script
+except ImportError:  # pragma: no cover - allow direct execution as a script
     import sys
 
     sys.path.append(str(Path(__file__).resolve().parent))
@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover - permite ejecución directa como script
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Desinstalador de plantillas de Office (Python)")
+    parser = argparse.ArgumentParser(description="Office template uninstaller (Python)")
     return parser.parse_args()
 
 
@@ -35,19 +35,19 @@ def main(argv: list[str] | None = None) -> int:
     base_dir = common.resolve_base_directory(Path.cwd())
     if base_dir == Path.cwd() and common.path_in_appdata(base_dir):
         common.exit_with_error(
-            '[ERROR] No se recibió la ruta de las plantillas. Ejecute el desinstalador desde "1. Pin templates..." para que se le pase la carpeta correcta.',
+            '[ERROR] Template path was not provided. Run the uninstaller from "1. Pin templates..." so the correct folder is passed in.',
             design_mode,
         )
 
     _print_intro(base_dir, design_mode)
 
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
-        logging.getLogger(__name__).info("[INFO] Desinstalando desde: %s", base_dir)
+        logging.getLogger(__name__).info("[INFO] Uninstalling from: %s", base_dir)
 
     destinations = common.default_destinations()
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
         logging.getLogger(__name__).info(
-            "[INFO] Rutas default: WORD=%s PPT=%s EXCEL=%s",
+            "[INFO] Default paths: WORD=%s PPT=%s EXCEL=%s",
             destinations.get("WORD"),
             destinations.get("POWERPOINT"),
             destinations.get("EXCEL"),
@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     _run_post_uninstall_actions(base_dir, design_mode)
 
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
-        logging.getLogger(__name__).info("[FINAL] Desinstalación completada.")
+        logging.getLogger(__name__).info("[FINAL] Uninstall completed.")
     elif not design_mode:
         print("Ready")
     return 0
@@ -69,8 +69,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _print_intro(base_dir: Path, design_mode: bool) -> None:
     if design_mode and common.DESIGN_LOG_UNINSTALLER:
-        logging.getLogger(__name__).info("[DEBUG] Modo diseño habilitado=true")
-        logging.getLogger(__name__).info("[INFO] Carpeta base: %s", base_dir)
+        logging.getLogger(__name__).info("[DEBUG] Design mode enabled=true")
+        logging.getLogger(__name__).info("[INFO] Base folder: %s", base_dir)
     else:
         print("Removing custom templates and restoring the Microsoft Office default settings...")
 
@@ -91,11 +91,11 @@ def _run_post_uninstall_actions(base_dir: Path, design_mode: bool) -> None:
     except OSError as exc:
         if design_mode and common.DESIGN_LOG_UNINSTALLER:
             logging.getLogger(__name__).warning(
-                "[WARN] No se pudieron ejecutar acciones post-desinstalación (%s)",
+                "[WARN] Post-uninstall actions could not be executed (%s)",
                 exc,
             )
         elif not design_mode:
-            print(f"[WARN] No se pudieron ejecutar acciones post-desinstalación ({exc})")
+            print(f"[WARN] Post-uninstall actions could not be executed ({exc})")
 
 
 if __name__ == "__main__":

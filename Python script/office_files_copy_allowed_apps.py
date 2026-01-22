@@ -1,4 +1,4 @@
-"""Listado de apps únicas para archivos Office con permiso de copia."""
+"""List unique apps for Office files that allow copying."""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +26,7 @@ def iter_copy_allowed_apps(base_dir: Path) -> list[str]:
 def launch_apps(apps: list[str], design_mode: bool) -> None:
     if os.name != "nt":
         if design_mode:
-            print("[WARN] Apertura de aplicaciones omitida: no es Windows.")
+            print("[WARN] Skipping app launch: not on Windows.")
         return
     mapping = {
         "WORD": "winword.exe",
@@ -39,26 +39,18 @@ def launch_apps(apps: list[str], design_mode: bool) -> None:
             continue
         try:
             if design_mode:
-                print(f"[OPEN] Intentando abrir {app} ({exe}) con startfile.")
+                print(f"[OPEN] Attempting to open {app} ({exe}) with startfile.")
             os.startfile(exe)  # type: ignore[arg-type]
         except OSError as exc:
             if design_mode:
-                print(f"[WARN] No se pudo iniciar {app} con startfile ({exc}); reintentando con cmd.")
+                print(f"[WARN] Could not start {app} with startfile ({exc}); retrying with cmd.")
             try:
                 if design_mode:
-                    print(f"[OPEN] Intentando abrir {app} ({exe}) con cmd start.")
+                    print(f"[OPEN] Attempting to open {app} ({exe}) with cmd start.")
                 subprocess.run(["cmd", "/c", "start", "", exe], check=False)
             except OSError as retry_exc:
                 if design_mode:
-                    print(f"[WARN] No se pudo iniciar {app} con cmd ({retry_exc})")
-
-
-def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
-    apps = iter_copy_allowed_apps(base_dir)
-    launch_apps(apps, design_mode)
-    if design_mode:
-        print({"apps": apps})
-    return apps
+                    print(f"[WARN] Could not start {app} with cmd ({retry_exc})")
 
 
 def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
@@ -71,18 +63,18 @@ def run_actions(base_dir: Path, design_mode: bool) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Listado único de apps para archivos Office con permiso de copia.",
+        description="List unique apps for Office files that allow copying.",
     )
     parser.add_argument(
         "base_dir",
         nargs="?",
         default=".",
-        help="Carpeta a escanear (por defecto, la carpeta actual).",
+        help="Folder to scan (defaults to the current folder).",
     )
     parser.add_argument(
         "--design-mode",
         action="store_true",
-        help="Muestra información de depuración y abre aplicaciones.",
+        help="Show debug information and open apps.",
     )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()

@@ -1,4 +1,4 @@
-"""Resolución de rutas de plantillas fuera de common."""
+"""Resolve template paths outside of common."""
 from __future__ import annotations
 
 import importlib.util
@@ -139,7 +139,7 @@ def _log_paths_if_design_mode(paths: dict[str, Path]) -> None:
     design_mode = os.environ.get("IsDesignModeEnabled", "false").lower() == "true"
     if not design_mode:
         return
-    print("[PATHS] Rutas resueltas:")
+    print("[PATHS] Resolved paths:")
     for key, value in paths.items():
         print(f"[PATHS] {key} = {value}")
 
@@ -167,7 +167,7 @@ def resolve_base_paths() -> dict[str, Path]:
 
 def _print_paths() -> None:
     paths = resolve_base_paths()
-    print("[PATHS] Rutas resueltas:")
+    print("[PATHS] Resolved paths:")
     for key, value in paths.items():
         print(f"[PATHS] {key} = {value}")
 

@@ -1,4 +1,4 @@
-"""Listado inicial de archivos Office en una carpeta."""
+"""Initial list of Office files in a folder."""
 from __future__ import annotations
 
 import argparse
@@ -72,12 +72,12 @@ def iter_office_files(base_dir: Path, extensions: Iterable[str] = OFFICE_EXTENSI
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Listado de archivos Office en una carpeta.")
+    parser = argparse.ArgumentParser(description="List Office files in a folder.")
     parser.add_argument(
         "base_dir",
         nargs="?",
         default=".",
-        help="Carpeta a escanear (por defecto, la carpeta actual).",
+        help="Folder to scan (defaults to the current folder).",
     )
     args = parser.parse_args(argv)
     base_dir = path_utils.normalize_path(Path(args.base_dir)).resolve()
